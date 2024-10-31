@@ -1,3 +1,4 @@
+using Discord;
 using OsuNews.Daily;
 using OsuNews.Discorb;
 using OsuNews.Main;
@@ -5,7 +6,6 @@ using OsuNews.MyTube;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
 using OsuNews.VideoV;
-using DiscordConfig = Discord.DiscordConfig;
 
 namespace OsuNews;
 

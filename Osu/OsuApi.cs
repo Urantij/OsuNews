@@ -82,8 +82,6 @@ public class OsuApi : IDisposable
     {
         _logger.LogInformation("Просим информацию...");
 
-        await GetBeatmapAsync(accessToken, 4327687);
-
         NameValueCollection queryParams = HttpUtility.ParseQueryString("");
         queryParams["category"] = "daily_challenge";
         queryParams["mode"] = "active"; // active ended all

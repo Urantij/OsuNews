@@ -12,8 +12,8 @@ public class MainWorker : IHostedService
     private readonly ILogger<MainWorker> _logger;
     private readonly List<INewscaster> _newscasters;
 
-    public MainWorker(DailyWorker? dailyWorker, VideoViewer? videoViewer, IEnumerable<INewscaster> newscasters,
-        ILogger<MainWorker> logger)
+    public MainWorker(IEnumerable<INewscaster> newscasters, ILogger<MainWorker> logger, DailyWorker? dailyWorker = null,
+        VideoViewer? videoViewer = null)
     {
         _dailyWorker = dailyWorker;
         _videoViewer = videoViewer;
