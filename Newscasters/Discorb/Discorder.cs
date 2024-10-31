@@ -31,12 +31,18 @@ public class Discorder : INewscaster
             .WithUrl($"https://osu.ppy.sh/users/{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.UserId}");
 
         builder.WithTitle(
-            $"{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Artist} - {response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Title} ({response.Game.CurrentPlaylistItem.Beatmap.Version})"
+            $"{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Artist} - {response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Title}"
                 [.._maxTitleLength]);
 
         {
             StringBuilder sb = new();
 
+            TimeSpan length = TimeSpan.FromSeconds(response.Map.TotalLength);
+
+            sb.AppendLine($"**__{response.Game.CurrentPlaylistItem.Beatmap.Version}__**");
+            sb.Append($"**Время:** {length.TotalMinutes}:{length.TotalSeconds:D2}");
+            sb.Append($"**BPM:** {response.Map.Bpm}");
+            sb.AppendLine();
             sb.AppendLine($"**Difficulty**: {response.Map.DifficultyRating:F1}");
             sb.AppendLine($"**OD**: {response.Map.Accuracy:F1}");
             sb.AppendLine($"**HP**: {response.Map.Drain:F1}");
