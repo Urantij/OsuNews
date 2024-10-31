@@ -40,6 +40,12 @@ public class Discorder : INewscaster
             TimeSpan length = TimeSpan.FromSeconds(response.Map.TotalLength);
 
             sb.AppendLine($"**__{response.Game.CurrentPlaylistItem.Beatmap.Version}__**");
+
+            if (response.Game.CurrentPlaylistItem.Beatmap.Mode != "osu")
+            {
+                sb.AppendLine($"Абалдеть, это {response.Game.CurrentPlaylistItem.Beatmap.Mode}");
+            }
+            
             sb.Append($"**Время:** {length.TotalMinutes}:{length.TotalSeconds:D2}");
             sb.Append($"**BPM:** {response.Map.Bpm}");
             sb.AppendLine();
