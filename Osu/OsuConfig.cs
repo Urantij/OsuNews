@@ -9,6 +9,6 @@ public class OsuConfig
 
     // Как сделать нормальное обновляемое решение я не знаю
     // Раз в 7-8 наверное иду на мсдн, а там кукиш
-    public static string RefreshTokenPath { get; } = "./RefreshToken";
+    public string RefreshTokenPath { get; set; } = "./RefreshToken";
     public required string RefreshToken { get; set; }
 }

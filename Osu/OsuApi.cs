@@ -1,7 +1,6 @@
 using System.Collections.Specialized;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Web;
 using Microsoft.Extensions.Options;
 using OsuNews.Osu.Models;
@@ -29,10 +28,10 @@ public class OsuApi : IDisposable
     {
         if (_actualRefreshToken == null)
         {
-            if (File.Exists(OsuConfig.RefreshTokenPath))
+            if (File.Exists(_config.RefreshTokenPath))
             {
                 _logger.LogDebug("Читаем токен с файла");
-                _actualRefreshToken = await File.ReadAllTextAsync(OsuConfig.RefreshTokenPath);
+                _actualRefreshToken = await File.ReadAllTextAsync(_config.RefreshTokenPath);
             }
             else
             {
@@ -62,7 +61,7 @@ public class OsuApi : IDisposable
 
         _logger.LogDebug("Пишем токен...");
         _actualRefreshToken = responseContent.refresh_token;
-        await File.WriteAllTextAsync(OsuConfig.RefreshTokenPath, responseContent.refresh_token);
+        await File.WriteAllTextAsync(_config.RefreshTokenPath, responseContent.refresh_token);
 
         _logger.LogDebug("Обновили токен.");
 
@@ -72,7 +71,7 @@ public class OsuApi : IDisposable
     public async Task<OsuApiResponse> RequestAsync()
     {
         string accessToken = await MakeTokenAsync();
-        
+
         OsuGame game = await GetDailyAsync(accessToken);
         OsuBeatmapExtended map = await GetBeatmapAsync(accessToken, game.CurrentPlaylistItem.BeatmapId);
 

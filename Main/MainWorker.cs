@@ -45,12 +45,16 @@ public class MainWorker : IHostedService
 
     private void DailyWorkerOnNewDaily(OsuApiResponse response)
     {
+        _logger.LogInformation("Сообщаем о новом дейлике...");
         StartNewscaster(newscaster => newscaster.TellThemAboutDailyAsync(response));
+        _logger.LogInformation("Сообщили о новом дейлике.");
     }
 
     private void VideoViewerOnNewVideoUploaded(string videoId)
     {
+        _logger.LogInformation("Сообщаем о новом видике...");
         StartNewscaster(newscaster => newscaster.TellThemAboutVideoAsync(videoId));
+        _logger.LogInformation("Сообщили о новом видике.");
     }
 
     private void StartNewscaster(Func<INewscaster, Task> action)

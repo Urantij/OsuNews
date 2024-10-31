@@ -7,20 +7,24 @@ namespace OsuNews.MyTube;
 
 public class TubeApi
 {
+    private readonly ILogger<TubeApi> _logger;
     private readonly YouTubeService _service;
     private readonly TubeConfig _config;
 
-    public TubeApi(IOptions<TubeConfig> options)
+    public TubeApi(IOptions<TubeConfig> options, ILogger<TubeApi> logger)
     {
+        _logger = logger;
         _config = options.Value;
         _service = new YouTubeService(new BaseClientService.Initializer()
         {
-            ApiKey = options.Value.ApiKey, 
+            ApiKey = options.Value.ApiKey,
         });
     }
-    
+
     public async Task<string> RequestAsync()
     {
+        _logger.LogInformation("Просим...");
+
         PlaylistItemsResource.ListRequest listRequest = _service.PlaylistItems.List("snippet");
         listRequest.PlaylistId = _config.PlaylistId;
         listRequest.MaxResults = 1;

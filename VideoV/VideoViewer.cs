@@ -6,6 +6,7 @@ namespace OsuNews.VideoV;
 public class VideoViewer : BackgroundService
 {
     private readonly TubeApi _api;
+    private readonly ILogger<VideoViewer> _logger;
     private readonly VideoViewerConfig _config;
 
     private string? _lastKnownVideoId;
@@ -16,9 +17,10 @@ public class VideoViewer : BackgroundService
 
     public event Action<string>? NewVideoUploaded;
 
-    public VideoViewer(TubeApi api, IOptions<VideoViewerConfig> options)
+    public VideoViewer(TubeApi api, IOptions<VideoViewerConfig> options, ILogger<VideoViewer> logger)
     {
         _api = api;
+        _logger = logger;
         _config = options.Value;
     }
 
@@ -41,17 +43,19 @@ public class VideoViewer : BackgroundService
             }
 
             string latestVideoId = await _api.RequestAsync();
-            
+
             if (_lastKnownVideoId == latestVideoId)
                 continue;
-            
+
             bool wasNull = _lastKnownVideoId == null;
-                
+
             _lastKnownVideoId = latestVideoId;
             await File.WriteAllTextAsync(_config.CachePath, latestVideoId, stoppingToken);
-                
+
             if (wasNull)
                 continue;
+
+            _logger.LogInformation("Новое видево {id}", latestVideoId);
 
             NewVideoUploaded?.Invoke(latestVideoId);
         }
