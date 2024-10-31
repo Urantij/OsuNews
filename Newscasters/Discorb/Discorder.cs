@@ -1,8 +1,10 @@
+using System.Text;
 using Discord;
 using Discord.Webhook;
 using Microsoft.Extensions.Options;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
+using OsuNews.Osu.Models;
 
 namespace OsuNews.Discorb;
 
@@ -32,8 +34,30 @@ public class Discorder : INewscaster
             $"{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Artist} - {response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Title} ({response.Game.CurrentPlaylistItem.Beatmap.Version})"
                 [.._maxTitleLength]);
 
-        builder.WithDescription(
-            $"**Difficulty**: {response.Map.DifficultyRating:F1}\n**AR**: {response.Map.Ar:F1} **OD**: {response.Map.Accuracy:F!} **HP**: {response.Map.Drain:F1} **CS**: {response.Map.Cs:F1}");
+        {
+            StringBuilder sb = new();
+
+            sb.AppendLine($"**Difficulty**: {response.Map.DifficultyRating:F1}");
+            sb.AppendLine($"**OD**: {response.Map.Accuracy:F1}");
+            sb.AppendLine($"**HP**: {response.Map.Drain:F1}");
+            sb.AppendLine($"**CS**: {response.Map.Cs:F1}");
+
+            if (response.Game.CurrentPlaylistItem.RequiredMods.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Установлены моды:");
+                foreach (OsuMod mod in response.Game.CurrentPlaylistItem.RequiredMods)
+                {
+                    sb.AppendLine($"**{mod.Acronym}**");
+                    foreach (KeyValuePair<string, object> setting in mod.Settings)
+                    {
+                        sb.AppendLine($"{setting.Key}: {setting.Value}");
+                    }
+                }
+            }
+
+            builder.WithDescription(sb.ToString());
+        }
 
         builder.WithUrl(
             $"https://osu.ppy.sh/beatmapsets/{response.Game.CurrentPlaylistItem.Beatmap.BeatmapsetId}#{response.Game.CurrentPlaylistItem.Beatmap.Mode}/{response.Game.CurrentPlaylistItem.Beatmap.Id}");
