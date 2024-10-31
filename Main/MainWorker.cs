@@ -1,57 +1,75 @@
 using OsuNews.Daily;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
-using OsuNews.Osu.Models;
+using OsuNews.VideoV;
 
 namespace OsuNews.Main;
 
 public class MainWorker : IHostedService
 {
-    private readonly DailyWorker _dailyWorker;
+    private readonly DailyWorker? _dailyWorker;
+    private readonly VideoViewer? _videoViewer;
     private readonly ILogger<MainWorker> _logger;
     private readonly List<INewscaster> _newscasters;
 
-    public MainWorker(DailyWorker dailyWorker, IEnumerable<INewscaster> newscasters, ILogger<MainWorker> logger)
+    public MainWorker(DailyWorker? dailyWorker, VideoViewer? videoViewer, IEnumerable<INewscaster> newscasters,
+        ILogger<MainWorker> logger)
     {
         _dailyWorker = dailyWorker;
+        _videoViewer = videoViewer;
         _logger = logger;
         _newscasters = newscasters.ToList();
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _dailyWorker.NewDaily += DailyWorkerOnNewDaily;
+        if (_dailyWorker != null)
+            _dailyWorker.NewDaily += DailyWorkerOnNewDaily;
+
+        if (_videoViewer != null)
+            _videoViewer.NewVideoUploaded += VideoViewerOnNewVideoUploaded;
 
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _dailyWorker.NewDaily -= DailyWorkerOnNewDaily;
+        if (_dailyWorker != null)
+            _dailyWorker.NewDaily -= DailyWorkerOnNewDaily;
+
+        if (_videoViewer != null)
+            _videoViewer.NewVideoUploaded -= VideoViewerOnNewVideoUploaded;
 
         return Task.CompletedTask;
     }
 
     private void DailyWorkerOnNewDaily(OsuApiResponse response)
     {
+        StartNewscaster(newscaster => newscaster.TellThemAboutDailyAsync(response));
+    }
+
+    private void VideoViewerOnNewVideoUploaded(string videoId)
+    {
+        StartNewscaster(newscaster => newscaster.TellThemAboutVideoAsync(videoId));
+    }
+
+    private void StartNewscaster(Func<INewscaster, Task> action)
+    {
         Task.Run(async () =>
         {
-            _logger.LogInformation("Делаем рассылку...");
             foreach (INewscaster newscaster in _newscasters)
             {
                 _logger.LogInformation("Сейчас {name}", newscaster.GetType().Name);
                 try
                 {
                     // TODO добавить таймаут?
-                    await newscaster.TellThemAsync(response);
+                    await action(newscaster);
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError(e, "Ошибка при попытке разослать дейлик.");
+                    _logger.LogError(e, "Ошибка при попытке отправить новость.");
                 }
             }
-
-            _logger.LogInformation("Разослали.");
         });
     }
 }

@@ -12,8 +12,4 @@
         <PackageReference Include="Google.Apis.YouTube.v3" Version="1.68.0.3582" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="YouTub\" />
-    </ItemGroup>
 </Project>

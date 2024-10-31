@@ -4,5 +4,7 @@ namespace OsuNews.Newscasters;
 
 public interface INewscaster
 {
-    public Task TellThemAsync(OsuApiResponse response);
+    public Task TellThemAboutDailyAsync(OsuApiResponse response);
+
+    public Task TellThemAboutVideoAsync(string videoId);
 }

@@ -23,9 +23,9 @@ public class DailyWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (File.Exists(_config.SavePath))
+        if (File.Exists(_config.CachePath))
         {
-            string content = await File.ReadAllTextAsync(_config.SavePath, stoppingToken);
+            string content = await File.ReadAllTextAsync(_config.CachePath, stoppingToken);
 
             _lastResponse = JsonSerializer.Deserialize<OsuApiResponse>(content);
         }
@@ -85,7 +85,7 @@ public class DailyWorker : BackgroundService
                 {
                     WriteIndented = true
                 });
-                await File.WriteAllTextAsync(_config.SavePath, content, stoppingToken);
+                await File.WriteAllTextAsync(_config.CachePath, content, stoppingToken);
             }
 
             NewDaily?.Invoke(response);

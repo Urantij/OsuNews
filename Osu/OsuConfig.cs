@@ -2,6 +2,8 @@ namespace OsuNews.Osu;
 
 public class OsuConfig
 {
+    public static string Path => "Osu";
+
     public required string ClientId { get; set; }
     public required string Secret { get; set; }
 
