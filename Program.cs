@@ -1,4 +1,3 @@
-using Discord;
 using OsuNews.Daily;
 using OsuNews.Discorb;
 using OsuNews.Main;
@@ -18,7 +17,7 @@ public class Program
         {
             if (builder.Configuration.GetSection(DiscorderConfig.Path).Exists())
             {
-                builder.Services.AddOptions<DiscordConfig>()
+                builder.Services.AddOptions<DiscorderConfig>()
                     .Bind(builder.Configuration.GetSection(DiscorderConfig.Path))
                     .ValidateOnStart();
 
