@@ -28,7 +28,7 @@ public class VideoViewer : BackgroundService
         {
             _lastKnownVideoId = await File.ReadAllTextAsync(_config.CachePath, stoppingToken);
         }
-        
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -41,18 +41,17 @@ public class VideoViewer : BackgroundService
             }
 
             string latestVideoId = await _api.RequestAsync();
-
-            if (_lastKnownVideoId == null)
-            {
-                _lastKnownVideoId = latestVideoId;
-                continue;
-            }
-
+            
             if (_lastKnownVideoId == latestVideoId)
                 continue;
-
+            
+            bool wasNull = _lastKnownVideoId == null;
+                
             _lastKnownVideoId = latestVideoId;
             await File.WriteAllTextAsync(_config.CachePath, latestVideoId, stoppingToken);
+                
+            if (wasNull)
+                continue;
 
             NewVideoUploaded?.Invoke(latestVideoId);
         }
