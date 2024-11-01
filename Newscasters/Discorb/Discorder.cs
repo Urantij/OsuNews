@@ -19,12 +19,16 @@ public class Discorder : IHostedService, INewscaster
 
     private readonly int _maxTitleLength = 256;
 
-    private readonly string _username = "Osu News";
-
     public Discorder(IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
         _logger = loggerFactory.CreateLogger<Discorder>();
         _config = options.Value;
+
+        if (_config.Default is null)
+        {
+            _logger.LogWarning("Попытка убить приложение через нул дефолт конфиг дискорда.");
+            _config.Default = DiscordPostConfig.CreateDefault();
+        }
 
         // Я крайне удивлён.
         // Я юзал Discord.Net для вебхук клиента
@@ -64,7 +68,7 @@ public class Discorder : IHostedService, INewscaster
             return Task.CompletedTask;
         }
 
-        DiscordWebhookBuilder b = CreateDefaultBuilder()
+        DiscordWebhookBuilder b = CreateDefaultBuilder(_config.Video)
             .WithContent($"Вышел новый видик!!! https://youtu.be/{videoId}");
 
         return _hook.ExecuteAsync(b);
@@ -78,7 +82,7 @@ public class Discorder : IHostedService, INewscaster
             return Task.CompletedTask;
         }
 
-        DiscordWebhookBuilder b = CreateDefaultBuilder();
+        DiscordWebhookBuilder b = CreateDefaultBuilder(_config.Daily);
 
         DiscordEmbedBuilder builder = new();
 
@@ -147,9 +151,13 @@ public class Discorder : IHostedService, INewscaster
         return _hook.ExecuteAsync(b);
     }
 
-    private DiscordWebhookBuilder CreateDefaultBuilder()
+    private DiscordWebhookBuilder CreateDefaultBuilder(DiscordPostConfig? postConfig)
     {
+        if (postConfig == null)
+            return CreateDefaultBuilder(_config.Default);
+
         return new DiscordWebhookBuilder()
-            .WithUsername(_username);
+            .WithUsername(postConfig.Name)
+            .WithAvatarUrl(postConfig.AvatarUrl);
     }
 }
