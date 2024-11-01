@@ -153,11 +153,8 @@ public class Discorder : IHostedService, INewscaster
 
     private DiscordWebhookBuilder CreateDefaultBuilder(DiscordPostConfig? postConfig)
     {
-        if (postConfig == null)
-            return CreateDefaultBuilder(_config.Default);
-
         return new DiscordWebhookBuilder()
-            .WithUsername(postConfig.Name)
-            .WithAvatarUrl(postConfig.AvatarUrl);
+            .WithUsername(postConfig?.Name ?? _config.Default.Name ?? "Osu News")
+            .WithAvatarUrl(postConfig?.AvatarUrl ?? _config.Default.AvatarUrl);
     }
 }
