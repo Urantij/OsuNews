@@ -43,23 +43,23 @@ public class MainWorker : IHostedService
         return Task.CompletedTask;
     }
 
-    private void DailyWorkerOnNewDaily(OsuApiResponse response)
+    private void DailyWorkerOnNewDaily(OsuFullDailyInfo info)
     {
         _logger.LogInformation("Сообщаем о новом дейлике...");
-        StartNewscaster(newscaster => newscaster.TellThemAboutDailyAsync(response));
-        _logger.LogInformation("Сообщили о новом дейлике.");
+        CastNewsAsync(newscaster => newscaster.TellThemAboutDailyAsync(info))
+            .ContinueWith((_) => { _logger.LogInformation("Сообщили о новом дейлике."); });
     }
 
     private void VideoViewerOnNewVideoUploaded(string videoId)
     {
         _logger.LogInformation("Сообщаем о новом видике...");
-        StartNewscaster(newscaster => newscaster.TellThemAboutVideoAsync(videoId));
-        _logger.LogInformation("Сообщили о новом видике.");
+        CastNewsAsync(newscaster => newscaster.TellThemAboutVideoAsync(videoId))
+            .ContinueWith((_) => { _logger.LogInformation("Сообщили о новом видике."); });
     }
 
-    private void StartNewscaster(Func<INewscaster, Task> action)
+    private Task CastNewsAsync(Func<INewscaster, Task> action)
     {
-        Task.Run(async () =>
+        return Task.Run(async () =>
         {
             foreach (INewscaster newscaster in _newscasters)
             {

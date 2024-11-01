@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using OsuNews.Osu;
+using OsuNews.Osu.Models;
 
 namespace OsuNews.Daily;
 
@@ -10,9 +11,9 @@ public class DailyWorker : BackgroundService
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
 
-    private OsuApiResponse? _lastResponse;
+    private DailyCacheInfo? _lastDailyCache;
 
-    public event Action<OsuApiResponse>? NewDaily;
+    public event Action<OsuFullDailyInfo>? NewDaily;
 
     public DailyWorker(OsuApi api, IOptions<DailyConfig> options, ILogger<DailyWorker> logger)
     {
@@ -27,7 +28,7 @@ public class DailyWorker : BackgroundService
         {
             string content = await File.ReadAllTextAsync(_config.CachePath, stoppingToken);
 
-            _lastResponse = JsonSerializer.Deserialize<OsuApiResponse>(content);
+            _lastDailyCache = JsonSerializer.Deserialize<DailyCacheInfo>(content);
         }
 
         // Я не знаю, как сделать так, чтобы этот сервис запускался после мейна
@@ -43,13 +44,21 @@ public class DailyWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            OsuApiResponse response = await _api.RequestAsync();
+            await _api.UpdateTokenAsync();
 
-            if (_lastResponse?.Game.Id == response.Game.Id)
+            OsuGame? daily = await _api.GetDailyAsync();
+
+            if (daily == null)
+            {
+                await Task.Delay(_config.ActiveCheck, stoppingToken);
+                continue;
+            }
+
+            if (_lastDailyCache?.Id == daily.Id)
             {
                 TimeSpan wait;
 
-                if (DateTime.UtcNow.TimeOfDay > _config.ActiveTime)
+                if (DateTime.UtcNow > _lastDailyCache.EndDate)
                 {
                     wait = _config.ActiveCheck;
                 }
@@ -59,10 +68,16 @@ public class DailyWorker : BackgroundService
 
                     // Если активное время наступает раньше конца пассивной проверки
                     // Проверим при наступлении активного времени + ожидание чека
-                    if (DateTime.UtcNow.TimeOfDay + wait >= _config.ActiveTime)
+
+                    if (DateTime.UtcNow + wait >= _lastDailyCache.EndDate)
                     {
-                        wait = (_config.ActiveTime - DateTime.UtcNow.TimeOfDay) + _config.ActiveCheck;
+                        wait = (_lastDailyCache.EndDate - DateTime.UtcNow) + _config.ActiveCheck;
                     }
+                }
+
+                if (wait < _config.ActiveCheck)
+                {
+                    wait = _config.ActiveCheck;
                 }
 
                 try
@@ -77,18 +92,18 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            _logger.LogInformation("Новый дейлик {id}", response.Game.Id);
+            _logger.LogInformation("Новый дейлик {id}", daily.Id);
 
-            _lastResponse = response;
+            OsuBeatmapExtended beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
+
+            OsuFullDailyInfo info = new(daily, beatmap);
+            _lastDailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime());
             {
-                string content = JsonSerializer.Serialize(response, new JsonSerializerOptions()
-                {
-                    WriteIndented = true
-                });
+                string content = JsonSerializer.Serialize(_lastDailyCache);
                 await File.WriteAllTextAsync(_config.CachePath, content, stoppingToken);
             }
 
-            NewDaily?.Invoke(response);
+            NewDaily?.Invoke(info);
         }
     }
 }

@@ -22,6 +22,7 @@ public class Program
                     .ValidateOnStart();
 
                 builder.Services.AddSingleton<Discorder>();
+                builder.Services.AddHostedService<Discorder>(sp => sp.GetRequiredService<Discorder>());
                 builder.Services.AddSingleton<INewscaster, Discorder>(sp => sp.GetRequiredService<Discorder>());
             }
         }

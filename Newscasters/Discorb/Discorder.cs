@@ -1,6 +1,7 @@
+using System.Net;
 using System.Text;
-using Discord;
-using Discord.Webhook;
+using DSharpPlus;
+using DSharpPlus.Entities;
 using Microsoft.Extensions.Options;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
@@ -8,57 +9,122 @@ using OsuNews.Osu.Models;
 
 namespace OsuNews.Discorb;
 
-public class Discorder : INewscaster
+public class Discorder : IHostedService, INewscaster
 {
+    private readonly ILogger<Discorder> _logger;
     private readonly DiscorderConfig _config;
 
     private readonly DiscordWebhookClient _client;
+    private DiscordWebhook? _hook;
 
     private readonly int _maxTitleLength = 256;
 
-    public Discorder(IOptions<DiscorderConfig> options)
+    private readonly string _username = "Osu News";
+
+    public Discorder(IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
+        _logger = loggerFactory.CreateLogger<Discorder>();
         _config = options.Value;
 
-        _client = new DiscordWebhookClient(_config.Hook);
+        // Я крайне удивлён.
+        // Я юзал Discord.Net для вебхук клиента
+        // Эти придурки додумались засунуть в конструктор апи запрос
+        // А я думаю, почему у меня конструктор откисает
+        // И нормальный асинхронный способ они не сделали. Браво.
+        // И прокси никак не засунуть. Это невероятно.
+
+        WebProxy? proxy = null;
+        if (options.Value.Proxy != null)
+        {
+            _logger.LogInformation("Используем прокси.");
+            proxy = new WebProxy(_config.Proxy);
+        }
+
+        _client = new DiscordWebhookClient(proxy: proxy, loggerFactory: loggerFactory);
     }
 
-    public Task TellThemAboutDailyAsync(OsuApiResponse response)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var builder = new EmbedBuilder();
+        _hook = await _client.AddWebhookAsync(_config.Hook);
+    }
 
-        builder.Author.WithName(response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Creator)
-            .WithUrl($"https://osu.ppy.sh/users/{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.UserId}");
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (_hook != null)
+            _client.RemoveWebhook(_hook.Id);
 
-        builder.WithTitle(
-            $"{response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Artist} - {response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Title}"
-                [.._maxTitleLength]);
+        return Task.CompletedTask;
+    }
+
+    public Task TellThemAboutVideoAsync(string videoId)
+    {
+        if (_hook == null)
+        {
+            _logger.LogWarning($"{nameof(TellThemAboutVideoAsync)} когда хука нет.");
+            return Task.CompletedTask;
+        }
+
+        DiscordWebhookBuilder b = CreateDefaultBuilder()
+            .WithContent($"Вышел новый видик!!! https://youtu.be/{videoId}");
+
+        return _hook.ExecuteAsync(b);
+    }
+
+    public Task TellThemAboutDailyAsync(OsuFullDailyInfo info)
+    {
+        if (_hook == null)
+        {
+            _logger.LogWarning($"{nameof(TellThemAboutDailyAsync)} когда хука нет.");
+            return Task.CompletedTask;
+        }
+
+        DiscordWebhookBuilder b = CreateDefaultBuilder();
+
+        DiscordEmbedBuilder builder = new();
+
+        builder.WithAuthor(name: info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Creator,
+            url: $"https://osu.ppy.sh/users/{info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.UserId}");
+
+        {
+            string title =
+                $"{info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Artist} - {info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Title}";
+
+            if (title.Length > _maxTitleLength)
+            {
+                title = $"{title.Substring(0, _maxTitleLength - 3)}...";
+            }
+
+            builder.WithTitle(title);
+        }
 
         {
             StringBuilder sb = new();
 
-            TimeSpan length = TimeSpan.FromSeconds(response.Map.TotalLength);
+            TimeSpan length = TimeSpan.FromSeconds(info.Map.TotalLength);
 
-            sb.AppendLine($"**__{response.Game.CurrentPlaylistItem.Beatmap.Version}__**");
+            sb.AppendLine(
+                $"**Сложность:** **__{info.Game.CurrentPlaylistItem.Beatmap.Version}__** ({info.Map.DifficultyRating:F1}\\*)");
 
-            if (response.Game.CurrentPlaylistItem.Beatmap.Mode != "osu")
-            {
-                sb.AppendLine($"Абалдеть, это {response.Game.CurrentPlaylistItem.Beatmap.Mode}");
-            }
-            
-            sb.Append($"**Время:** {length.TotalMinutes}:{length.TotalSeconds:D2}");
-            sb.Append($"**BPM:** {response.Map.Bpm}");
+            sb.Append($@"**Время:** {length:mm\:ss}");
+            sb.AppendLine($" **BPM:** {info.Map.Bpm}");
             sb.AppendLine();
-            sb.AppendLine($"**Difficulty**: {response.Map.DifficultyRating:F1}");
-            sb.AppendLine($"**OD**: {response.Map.Accuracy:F1}");
-            sb.AppendLine($"**HP**: {response.Map.Drain:F1}");
-            sb.AppendLine($"**CS**: {response.Map.Cs:F1}");
 
-            if (response.Game.CurrentPlaylistItem.RequiredMods.Count > 0)
+            if (info.Game.CurrentPlaylistItem.Beatmap.Mode != "osu")
+            {
+                sb.AppendLine($"Абалдеть, это {info.Game.CurrentPlaylistItem.Beatmap.Mode}");
+                sb.AppendLine();
+            }
+
+            sb.Append($"**OD**: {info.Map.Accuracy:F1}");
+            sb.Append($" **HP**: {info.Map.Drain:F1}");
+            sb.Append($" **CS**: {info.Map.Cs:F1}");
+            sb.AppendLine($" **AR**: {info.Map.Ar:F1}");
+
+            if (info.Game.CurrentPlaylistItem.RequiredMods.Count > 0)
             {
                 sb.AppendLine();
                 sb.AppendLine("Установлены моды:");
-                foreach (OsuMod mod in response.Game.CurrentPlaylistItem.RequiredMods)
+                foreach (OsuMod mod in info.Game.CurrentPlaylistItem.RequiredMods)
                 {
                     sb.AppendLine($"**{mod.Acronym}**");
                     foreach (KeyValuePair<string, object> setting in mod.Settings)
@@ -72,15 +138,18 @@ public class Discorder : INewscaster
         }
 
         builder.WithUrl(
-            $"https://osu.ppy.sh/beatmapsets/{response.Game.CurrentPlaylistItem.Beatmap.BeatmapsetId}#{response.Game.CurrentPlaylistItem.Beatmap.Mode}/{response.Game.CurrentPlaylistItem.Beatmap.Id}");
-        builder.WithImageUrl(response.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Covers.Cover2x);
+            $"https://osu.ppy.sh/beatmapsets/{info.Game.CurrentPlaylistItem.Beatmap.BeatmapsetId}#{info.Game.CurrentPlaylistItem.Beatmap.Mode}/{info.Game.CurrentPlaylistItem.Beatmap.Id}");
+        builder.WithImageUrl(info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Covers.Cover2x);
         builder.WithFooter("помогите я застрял в холодильнике");
 
-        return _client.SendMessageAsync(username: "Osu News", embeds: [builder.Build()]);
+        b.AddEmbed(builder.Build());
+
+        return _hook.ExecuteAsync(b);
     }
 
-    public Task TellThemAboutVideoAsync(string videoId)
+    private DiscordWebhookBuilder CreateDefaultBuilder()
     {
-        return _client.SendMessageAsync(username: "Osu News", text: $"Вышел новый видик!!! https://youtu.be/{videoId}");
+        return new DiscordWebhookBuilder()
+            .WithUsername(_username);
     }
 }

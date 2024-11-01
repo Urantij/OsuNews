@@ -201,7 +201,7 @@ public class Participant
 
 public class OsuGame
 {
-    [JsonPropertyName("id")] public int Id { get; set; }
+    [JsonPropertyName("id")] public ulong Id { get; set; }
 
     [JsonPropertyName("name")] public string Name { get; set; }
 
@@ -209,7 +209,7 @@ public class OsuGame
 
     [JsonPropertyName("type")] public string Type { get; set; }
 
-    [JsonPropertyName("user_id")] public int UserId { get; set; }
+    [JsonPropertyName("user_id")] public ulong UserId { get; set; }
 
     [JsonPropertyName("starts_at")] public DateTime StartsAt { get; set; }
 

@@ -15,6 +15,7 @@ public class OsuApi : IDisposable
     private readonly HttpClient _client;
 
     private string? _actualRefreshToken;
+    private string? _accessToken;
 
     public OsuApi(IOptions<OsuConfig> options, ILogger<OsuApi> logger)
     {
@@ -68,19 +69,14 @@ public class OsuApi : IDisposable
         return responseContent.access_token;
     }
 
-    public async Task<OsuApiResponse> RequestAsync()
+    public async Task UpdateTokenAsync()
     {
-        string accessToken = await MakeTokenAsync();
-
-        OsuGame game = await GetDailyAsync(accessToken);
-        OsuBeatmapExtended map = await GetBeatmapAsync(accessToken, game.CurrentPlaylistItem.BeatmapId);
-
-        return new OsuApiResponse(game, map);
+        _accessToken = await MakeTokenAsync();
     }
 
-    public async Task<OsuGame> GetDailyAsync(string accessToken)
+    public async Task<OsuGame?> GetDailyAsync()
     {
-        _logger.LogInformation("Просим информацию...");
+        _logger.LogDebug("Просим информацию...");
 
         NameValueCollection queryParams = HttpUtility.ParseQueryString("");
         queryParams["category"] = "daily_challenge";
@@ -89,25 +85,25 @@ public class OsuApi : IDisposable
         using var requestMessage =
             new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/rooms?{queryParams.ToString()}");
 
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         requestMessage.Headers.Add("x-api-version", "20240923");
 
         HttpResponseMessage responseMessage =
             await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 
-        OsuGame content = (await responseMessage.Content.ReadFromJsonAsync<OsuGame[]>()).First();
+        OsuGame? content = (await responseMessage.Content.ReadFromJsonAsync<OsuGame[]>()).FirstOrDefault();
 
         return content;
     }
 
-    public async Task<OsuBeatmapExtended> GetBeatmapAsync(string accessToken, ulong beatmapId)
+    public async Task<OsuBeatmapExtended> GetBeatmapAsync(ulong beatmapId)
     {
-        _logger.LogInformation("Просим карту...");
+        _logger.LogDebug("Просим карту...");
 
         using var requestMessage =
             new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/beatmaps/{beatmapId}");
 
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         requestMessage.Headers.Add("x-api-version", "20240923");
 
         HttpResponseMessage responseMessage =
