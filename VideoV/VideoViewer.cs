@@ -11,10 +11,6 @@ public class VideoViewer : BackgroundService
 
     private string? _lastKnownVideoId;
 
-    // 10000 запросов в день
-    // Раз в 15 сек норм (с запасом)
-    private readonly TimeSpan _checkDelay = TimeSpan.FromSeconds(15);
-
     public event Action<string>? NewVideoUploaded;
 
     public VideoViewer(TubeApi api, IOptions<VideoViewerConfig> options, ILogger<VideoViewer> logger)
@@ -35,7 +31,7 @@ public class VideoViewer : BackgroundService
         {
             try
             {
-                await Task.Delay(_checkDelay, stoppingToken);
+                await Task.Delay(_config.CheckDelay, stoppingToken);
             }
             catch
             {
