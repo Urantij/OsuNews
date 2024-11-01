@@ -23,7 +23,7 @@ public class TubeApi
 
     public async Task<string> RequestAsync()
     {
-        _logger.LogInformation("Просим...");
+        _logger.LogDebug("Просим...");
 
         PlaylistItemsResource.ListRequest listRequest = _service.PlaylistItems.List("snippet");
         listRequest.PlaylistId = _config.PlaylistId;
