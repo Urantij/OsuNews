@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using OsuNews.Analyze;
+using OsuNews.Analyze.Models;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
 
@@ -8,6 +10,7 @@ namespace OsuNews.Daily;
 public class DailyWorker : BackgroundService
 {
     private readonly OsuApi _api;
+    private readonly MapDownloader _mapDownloader;
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
 
@@ -15,9 +18,11 @@ public class DailyWorker : BackgroundService
 
     public event Action<OsuFullDailyInfo>? NewDaily;
 
-    public DailyWorker(OsuApi api, IOptions<DailyConfig> options, ILogger<DailyWorker> logger)
+    public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<DailyConfig> options,
+        ILogger<DailyWorker> logger)
     {
         _api = api;
+        _mapDownloader = mapDownloader;
         _logger = logger;
         _config = options.Value;
     }
@@ -96,7 +101,25 @@ public class DailyWorker : BackgroundService
 
             OsuBeatmapExtended beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
 
-            OsuFullDailyInfo info = new(daily, beatmap);
+            MapAnalyzeResult? analyzeResult = null;
+            bool triedToAnalyze = false;
+            if (_config.DoAnalyze)
+            {
+                triedToAnalyze = true;
+
+                try
+                {
+                    MapData mapData = await _mapDownloader.DownloadAsync(beatmap.Id, cancellationToken: stoppingToken);
+
+                    analyzeResult = MapAnalyzer.Analyze(mapData);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Не удалось проанализировать карту.");
+                }
+            }
+
+            OsuFullDailyInfo info = new(daily, beatmap, analyzeResult, triedToAnalyze);
             _lastDailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime());
             {
                 string content = JsonSerializer.Serialize(_lastDailyCache);

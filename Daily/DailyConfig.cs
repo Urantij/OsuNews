@@ -8,4 +8,6 @@ public class DailyConfig
     public TimeSpan ActiveCheck { get; set; } = TimeSpan.FromSeconds(30);
 
     public string CachePath { get; set; } = "./LastDailyCache.json";
+
+    public bool DoAnalyze { get; set; } = true;
 }

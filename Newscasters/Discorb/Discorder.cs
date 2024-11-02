@@ -138,6 +138,20 @@ public class Discorder : IHostedService, INewscaster
                 }
             }
 
+            if (info.TriedToAnalyze)
+            {
+                sb.AppendLine();
+
+                if (info.Analyze == null)
+                {
+                    sb.AppendLine("Не удалось провести анализ.");
+                }
+                else if (info.Analyze.IsGandon == true)
+                {
+                    sb.AppendLine("Внимание, автор карты гандон.");
+                }
+            }
+
             builder.WithDescription(sb.ToString());
         }
 

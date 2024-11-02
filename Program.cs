@@ -1,3 +1,4 @@
+using OsuNews.Analyze;
 using OsuNews.Daily;
 using OsuNews.Discorb;
 using OsuNews.Main;
@@ -13,6 +14,8 @@ public class Program
     public static void Main(string[] args)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+        builder.Services.AddSingleton<MapDownloader>();
 
         {
             if (builder.Configuration.GetSection(DiscorderConfig.Path).Exists())
