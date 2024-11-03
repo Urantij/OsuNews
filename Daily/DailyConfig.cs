@@ -10,4 +10,6 @@ public class DailyConfig
     public string CachePath { get; set; } = "./LastDailyCache.json";
 
     public bool DoAnalyze { get; set; } = true;
+
+    public bool AttachPreview { get; set; } = false;
 }

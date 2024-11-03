@@ -74,12 +74,12 @@ public class Discorder : IHostedService, INewscaster
         return _hook.ExecuteAsync(b);
     }
 
-    public Task TellThemAboutDailyAsync(OsuFullDailyInfo info)
+    public async Task TellThemAboutDailyAsync(OsuFullDailyInfo info)
     {
         if (_hook == null)
         {
             _logger.LogWarning($"{nameof(TellThemAboutDailyAsync)} когда хука нет.");
-            return Task.CompletedTask;
+            return;
         }
 
         DiscordWebhookBuilder b = CreateDefaultBuilder(_config.Daily);
@@ -152,6 +152,12 @@ public class Discorder : IHostedService, INewscaster
                 }
             }
 
+            if (info.TriedToPreview && info.PreviewContent == null)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Не удалось загрузить превью.");
+            }
+
             builder.WithDescription(sb.ToString());
         }
 
@@ -162,7 +168,20 @@ public class Discorder : IHostedService, INewscaster
 
         b.AddEmbed(builder.Build());
 
-        return _hook.ExecuteAsync(b);
+        MemoryStream? previewStream = null;
+        if (info.TriedToPreview && info.PreviewContent != null)
+        {
+            previewStream = new MemoryStream(info.PreviewContent);
+            // TODO возможно, стоит название вывести отдельно. Мож там быть не мп3?
+            b.AddFile("preview.mp3", previewStream);
+        }
+
+        await _hook.ExecuteAsync(b);
+
+        if (previewStream != null)
+        {
+            await previewStream.DisposeAsync();
+        }
     }
 
     private DiscordWebhookBuilder CreateDefaultBuilder(DiscordPostConfig? postConfig)

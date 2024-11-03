@@ -112,6 +112,22 @@ public class OsuApi : IDisposable
         return await responseMessage.Content.ReadFromJsonAsync<OsuBeatmapExtended>();
     }
 
+    // Этому здесь не совсем место (совсем не), но делать ещё один сервис ради этого мне впадлу.
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="previewUrl">в таком формате //b.ppy.sh/preview/123123.mp3</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task<byte[]> DownloadPreviewAsync(string previewUrl, CancellationToken cancellationToken = default)
+    {
+        Uri uri = new($"https:{previewUrl}");
+
+        byte[] content = await _client.GetByteArrayAsync(uri, cancellationToken: cancellationToken);
+
+        return content;
+    }
+
     // public async Task<OsuGameAttributes> RequestAttributesAsync(string accessToken, ulong beatmapId, ICollection<OsuMod> mods)
     // {
     //     _logger.LogInformation("Просим сложность...");

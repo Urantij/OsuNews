@@ -119,7 +119,23 @@ public class DailyWorker : BackgroundService
                 }
             }
 
-            OsuFullDailyInfo info = new(daily, beatmap, analyzeResult, triedToAnalyze);
+            byte[]? previewContent = null;
+            bool triedToPreview = false;
+            if (_config.AttachPreview)
+            {
+                triedToPreview = true;
+
+                try
+                {
+                    previewContent = await _api.DownloadPreviewAsync(beatmap.Beatmapset.PreviewUrl, stoppingToken);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Не удалось скачать превью.");
+                }
+            }
+
+            OsuFullDailyInfo info = new(daily, beatmap, analyzeResult, triedToAnalyze, previewContent, triedToPreview);
             _lastDailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime());
             {
                 string content = JsonSerializer.Serialize(_lastDailyCache);
