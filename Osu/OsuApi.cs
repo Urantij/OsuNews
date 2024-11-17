@@ -67,12 +67,12 @@ public class OsuApi : IDisposable
         var responseContent = await responseMessage.Content.ReadFromJsonAsync<RefreshResponse>();
 
         _logger.LogDebug("Пишем токен...");
-        _actualRefreshToken = responseContent.refresh_token;
-        await File.WriteAllTextAsync(_config.RefreshTokenPath, responseContent.refresh_token);
+        _actualRefreshToken = responseContent.RefreshToken;
+        await File.WriteAllTextAsync(_config.RefreshTokenPath, responseContent.RefreshToken);
 
         _logger.LogDebug("Обновили токен.");
 
-        return responseContent.access_token;
+        return responseContent.AccessToken;
     }
 
     /// <summary>
