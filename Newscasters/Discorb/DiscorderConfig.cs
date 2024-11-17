@@ -1,4 +1,4 @@
-namespace OsuNews.Discorb;
+namespace OsuNews.Newscasters.Discorb;
 
 public class DiscordPostConfig
 {

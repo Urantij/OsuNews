@@ -1,9 +1,9 @@
 using OsuNews.Analyze;
 using OsuNews.Daily;
-using OsuNews.Discorb;
 using OsuNews.Main;
 using OsuNews.MyTube;
 using OsuNews.Newscasters;
+using OsuNews.Newscasters.Discorb;
 using OsuNews.Osu;
 using OsuNews.VideoV;
 
