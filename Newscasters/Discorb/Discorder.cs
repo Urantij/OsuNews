@@ -190,7 +190,6 @@ public partial class Discorder : IHostedService, INewscaster
 
         await _client.ExecuteAsync(b);
 
-        // TODO Чето я сомневаюсь, что дискордер должен его диспоузить
         if (previewStream != null)
         {
             await previewStream.DisposeAsync();
