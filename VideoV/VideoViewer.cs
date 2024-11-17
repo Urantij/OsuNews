@@ -38,7 +38,18 @@ public class VideoViewer : BackgroundService
                 return;
             }
 
-            string latestVideoId = await _api.RequestAsync();
+            string latestVideoId;
+            try
+            {
+                latestVideoId = await _api.RequestAsync();
+            }
+            catch (Exception e)
+            {
+                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+
+                _logger.LogWarning(e, "Не удалось забрать айди последнего видео.");
+                continue;
+            }
 
             if (_lastKnownVideoId == latestVideoId)
                 continue;

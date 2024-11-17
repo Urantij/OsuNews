@@ -25,6 +25,12 @@ public class OsuApi : IDisposable
         _client = new HttpClient();
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Бывает...</exception>
     private async Task<string> MakeTokenAsync()
     {
         if (_actualRefreshToken == null)
@@ -69,11 +75,21 @@ public class OsuApi : IDisposable
         return responseContent.access_token;
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task UpdateTokenAsync()
     {
         _accessToken = await MakeTokenAsync();
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task<OsuGame?> GetDailyAsync()
     {
         _logger.LogDebug("Просим информацию...");
@@ -96,6 +112,11 @@ public class OsuApi : IDisposable
         return content;
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task<OsuBeatmapExtended> GetBeatmapAsync(ulong beatmapId)
     {
         _logger.LogDebug("Просим карту...");
@@ -119,6 +140,8 @@ public class OsuApi : IDisposable
     /// <param name="previewUrl">в таком формате //b.ppy.sh/preview/123123.mp3</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task<byte[]> DownloadPreviewAsync(string previewUrl, CancellationToken cancellationToken = default)
     {
         Uri uri = new($"https:{previewUrl}");

@@ -49,9 +49,50 @@ public class DailyWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            await _api.UpdateTokenAsync();
+            try
+            {
+                await _api.UpdateTokenAsync();
+            }
+            catch (Exception e)
+            {
+                if (e is not (HttpRequestException or TaskCanceledException)) throw;
 
-            OsuGame? daily = await _api.GetDailyAsync();
+                _logger.LogWarning(e, "Не удалось обновить токен.");
+
+                try
+                {
+                    await Task.Delay(_config.FailureWaitTime, stoppingToken);
+                }
+                catch
+                {
+                    return;
+                }
+
+                continue;
+            }
+
+            OsuGame? daily;
+            try
+            {
+                daily = await _api.GetDailyAsync();
+            }
+            catch (Exception e)
+            {
+                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+
+                _logger.LogWarning(e, "Не удалось загрузить дейлик.");
+
+                try
+                {
+                    await Task.Delay(_config.FailureWaitTime, stoppingToken);
+                }
+                catch
+                {
+                    return;
+                }
+
+                continue;
+            }
 
             if (daily == null)
             {
@@ -99,7 +140,30 @@ public class DailyWorker : BackgroundService
 
             _logger.LogInformation("Новый дейлик {id}", daily.Id);
 
-            OsuBeatmapExtended beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
+            // В теории, не нужно делать все запросы заново, если провалился один.
+            // Но писать лупы мне впадлу, это выглядит сильно хуже.
+            OsuBeatmapExtended beatmap;
+            try
+            {
+                beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
+            }
+            catch (Exception e)
+            {
+                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+
+                _logger.LogWarning(e, "Не удалось загрузить карту.");
+
+                try
+                {
+                    await Task.Delay(_config.FailureWaitTime, stoppingToken);
+                }
+                catch
+                {
+                    return;
+                }
+
+                continue;
+            }
 
             MapAnalyzeResult? analyzeResult = null;
             bool triedToAnalyze = false;

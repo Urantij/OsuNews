@@ -21,6 +21,12 @@ public class TubeApi
         });
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Я не уверен на 100%, что эта ошибка падает, но мне кажется, она может.</exception>
     public async Task<string> RequestAsync()
     {
         _logger.LogDebug("Просим...");
