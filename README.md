@@ -17,6 +17,8 @@ https://osu.ppy.sh/home/account/edit тут нужно создать своё o
 
 ## конфигурация
 
+Пример конфигурации находится в файле appsettings.Development.json  
+
 Конфиги, которые нужно указать приложению. Например, через appsettings.json  
 Osu/OsuConfig.cs  
 Newscasters/Discorb/DiscorderConfig.cs  
