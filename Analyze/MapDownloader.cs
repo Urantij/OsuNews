@@ -6,14 +6,27 @@ public class MapDownloader : IDisposable
 
     private readonly Uri _baseUrl = new("https://catboy.best/osu/");
 
-    public MapDownloader()
+    private readonly ILogger _parserLogger;
+
+    public MapDownloader(ILoggerFactory loggerFactory)
     {
+        _parserLogger = loggerFactory.CreateLogger("MapParser");
+
         _client = new HttpClient();
         _client.Timeout = TimeSpan.FromSeconds(20);
 
         _client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Osu News");
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="BadMapException">Если карта оказалась в непонятном формате.</exception>
     public async Task<Models.MapData> DownloadAsync(ulong id, CancellationToken cancellationToken = default)
     {
         Uri uri = new(_baseUrl, id.ToString());
@@ -27,7 +40,7 @@ public class MapDownloader : IDisposable
             content = await responseMessage.Content.ReadAsStringAsync(cancellationToken);
         }
 
-        return MapParser.CreateFromRaw(content);
+        return MapParser.CreateFromRaw(content, logger: _parserLogger);
     }
 
     public void Dispose()

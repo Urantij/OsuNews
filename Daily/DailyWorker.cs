@@ -177,9 +177,13 @@ public class DailyWorker : BackgroundService
 
                     analyzeResult = MapAnalyzer.Analyze(mapData);
                 }
+                catch (BadMapException badMapException)
+                {
+                    _logger.LogWarning(badMapException.InnerException, "Не удалось проанализировать карту.");
+                }
                 catch (Exception e)
                 {
-                    _logger.LogWarning(e, "Не удалось проанализировать карту.");
+                    _logger.LogWarning(e, "Не удалось загрузить карту.");
                 }
             }
 

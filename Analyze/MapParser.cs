@@ -9,27 +9,43 @@ public static partial class MapParser
 
     private static string SplitString { get; } = "\r\n";
 
-    public static MapData CreateFromRaw(string raw)
+    /// <summary>
+    /// Парсит карту формата v14. Другие форматы можно найти на гитхабе в истории коммитов. Но мне слишком впадлу разбираться, учитывая, что этот файл правили много-много раз.
+    /// </summary>
+    /// <param name="raw">Строка контент мапы</param>
+    /// <param name="logger">Сюда напишет ворнинг, если формат не v14</param>
+    /// <returns></returns>
+    /// <exception cref="BadMapException">Если формат текста непонятный.</exception>
+    public static MapData CreateFromRaw(string raw, ILogger? logger = null)
     {
         int endLineIndex = raw.IndexOf(SplitString, StringComparison.Ordinal);
         {
             string versionString = raw[..endLineIndex];
             if (versionString != "osu file format v14")
             {
-                throw new Exception($"Неизвестный тип карты {versionString}");
+                logger?.LogWarning("Неизвестный тип карты {version}", versionString);
             }
         }
 
-        Dictionary<string, List<string>> sectionsDict = ParseSections(raw);
-
-        HitObject[] hitObjsList = sectionsDict["HitObjects"]
-            .Select(ParseHitObject)
-            .ToArray();
-
-        return new MapData()
+        Dictionary<string, List<string>>? sectionsDict = null;
+        HitObject[]? hitObjsList = null;
+        try
         {
-            HitObjects = hitObjsList
-        };
+            sectionsDict = ParseSections(raw);
+
+            hitObjsList = sectionsDict["HitObjects"]
+                .Select(ParseHitObject)
+                .ToArray();
+
+            return new MapData()
+            {
+                HitObjects = hitObjsList
+            };
+        }
+        catch (Exception e)
+        {
+            throw new BadMapException(sectionsDict, hitObjsList, e);
+        }
     }
 
     private static HitObject ParseHitObject(string line)
