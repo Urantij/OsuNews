@@ -18,19 +18,20 @@ public static partial class MapParser
     /// <exception cref="BadMapException">Если формат текста непонятный.</exception>
     public static MapData CreateFromRaw(string raw, ILogger? logger = null)
     {
-        int endLineIndex = raw.IndexOf(SplitString, StringComparison.Ordinal);
-        {
-            string versionString = raw[..endLineIndex];
-            if (versionString != "osu file format v14")
-            {
-                logger?.LogWarning("Неизвестный тип карты {version}", versionString);
-            }
-        }
-
+        string? versionString = null;
         Dictionary<string, List<string>>? sectionsDict = null;
         HitObject[]? hitObjsList = null;
         try
         {
+            int endLineIndex = raw.IndexOf(SplitString, StringComparison.Ordinal);
+            {
+                versionString = raw[..endLineIndex];
+                if (versionString != "osu file format v14")
+                {
+                    logger?.LogWarning("Неизвестный тип карты {version}", versionString);
+                }
+            }
+
             sectionsDict = ParseSections(raw);
 
             hitObjsList = sectionsDict["HitObjects"]
@@ -44,7 +45,7 @@ public static partial class MapParser
         }
         catch (Exception e)
         {
-            throw new BadMapException(sectionsDict, hitObjsList, e);
+            throw new BadMapException(versionString, sectionsDict, hitObjsList, e);
         }
     }
 
