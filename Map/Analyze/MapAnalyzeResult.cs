@@ -1,4 +1,4 @@
-namespace OsuNews.Analyze;
+namespace OsuNews.Map.Analyze;
 
 public class MapAnalyzeResult
 {

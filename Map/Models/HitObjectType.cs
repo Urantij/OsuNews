@@ -1,4 +1,4 @@
-namespace OsuNews.Analyze.Models;
+namespace OsuNews.Map.Models;
 
 public enum HitObjectType
 {

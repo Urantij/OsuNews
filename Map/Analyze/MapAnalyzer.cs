@@ -1,6 +1,6 @@
-using OsuNews.Analyze.Models;
+using OsuNews.Map.Models;
 
-namespace OsuNews.Analyze;
+namespace OsuNews.Map.Analyze;
 
 public static class MapAnalyzer
 {

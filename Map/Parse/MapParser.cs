@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using OsuNews.Analyze.Models;
+using OsuNews.Map.Models;
 
-namespace OsuNews.Analyze;
+namespace OsuNews.Map.Parse;
 
 public static partial class MapParser
 {

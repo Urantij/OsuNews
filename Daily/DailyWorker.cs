@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using OsuNews.Analyze;
-using OsuNews.Analyze.Models;
+using OsuNews.Map;
+using OsuNews.Map.Analyze;
+using OsuNews.Map.Models;
+using OsuNews.Map.Parse;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
 

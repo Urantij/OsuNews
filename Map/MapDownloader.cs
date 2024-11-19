@@ -1,4 +1,7 @@
-namespace OsuNews.Analyze;
+using OsuNews.Map.Models;
+using OsuNews.Map.Parse;
+
+namespace OsuNews.Map;
 
 public class MapDownloader : IDisposable
 {
@@ -27,7 +30,7 @@ public class MapDownloader : IDisposable
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     /// <exception cref="BadMapException">Если карта оказалась в непонятном формате.</exception>
-    public async Task<Models.MapData> DownloadAsync(ulong id, CancellationToken cancellationToken = default)
+    public async Task<MapData> DownloadAsync(ulong id, CancellationToken cancellationToken = default)
     {
         Uri uri = new(_baseUrl, id.ToString());
 

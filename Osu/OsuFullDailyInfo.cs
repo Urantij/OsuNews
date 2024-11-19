@@ -1,4 +1,4 @@
-using OsuNews.Analyze;
+using OsuNews.Map.Analyze;
 using OsuNews.Osu.Models;
 
 namespace OsuNews.Osu;
