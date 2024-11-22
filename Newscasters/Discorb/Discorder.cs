@@ -3,25 +3,41 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using NetCord.Rest;
+using OsuNews.MyLittleStorage;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
 
 namespace OsuNews.Newscasters.Discorb;
+
+public class DiscordStorage : MyStorage<Uri>
+{
+    public DiscordStorage(string path, ILoggerFactory loggerFactory) : base(path, loggerFactory)
+    {
+    }
+}
 
 public partial class Discorder : IHostedService, INewscaster
 {
     // https://discord.com/api/webhooks/1234356456/a-asd132_4sdf3-asd3234
     private static readonly Regex WebhookUriRegex = MyWebHookRegex();
 
+    private readonly DiscordStorage _discordStorage;
     private readonly ILogger<Discorder> _logger;
     private readonly DiscorderConfig _config;
 
-    private readonly WebhookClient _client;
+    private readonly Lock _clientsLocker = new();
+
+    private readonly List<WebhookClient> _clients = new();
+
+    // клянусь я хотел сделать кансер но нормально
+    // но я устау)
+    private readonly Dictionary<WebhookClient, Uri> _clientToUri = new();
 
     private readonly int _maxTitleLength = 256;
 
-    public Discorder(IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
+    public Discorder(DiscordStorage discordStorage, IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
+        _discordStorage = discordStorage;
         _logger = loggerFactory.CreateLogger<Discorder>();
         _config = options.Value;
 
@@ -60,15 +76,22 @@ public partial class Discorder : IHostedService, INewscaster
             };
         }
 
-        // Странно, что у них нет хелпера под это. А если и есть, то найти его я не смог. Документации нет.
-        Match match = WebhookUriRegex.Match(_config.Hook.ToString());
-        if (!match.Success)
-            throw new Exception("Не удалось пропарсить хук юрл.");
+        Uri[] targets = _discordStorage.GetAll();
+        foreach (Uri target in targets)
+        {
+            // Странно, что у них нет хелпера под это. А если и есть, то найти его я не смог. Документации нет.
+            Match match = WebhookUriRegex.Match(target.ToString());
+            if (!match.Success)
+                throw new Exception($"Не удалось пропарсить хук юрл. {target}");
 
-        ulong hookId = ulong.Parse(match.Groups["id"].Value);
-        string hookToken = match.Groups["token"].Value;
+            ulong hookId = ulong.Parse(match.Groups["id"].Value);
+            string hookToken = match.Groups["token"].Value;
 
-        _client = new WebhookClient(hookId, hookToken, webhookClientConfiguration);
+            WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
+            _clients.Add(client);
+
+            _clientToUri[client] = target;
+        }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -87,7 +110,7 @@ public partial class Discorder : IHostedService, INewscaster
         WebhookMessageProperties b = CreateDefaultBuilder(_config.Video)
             .WithContent($"Вышел новый видик!!! https://youtu.be/{videoId}");
 
-        return _client.ExecuteAsync(b);
+        return SendAllAsync(b);
     }
 
     public async Task TellThemAboutDailyAsync(OsuFullDailyInfo info)
@@ -188,12 +211,63 @@ public partial class Discorder : IHostedService, INewscaster
             b.AddAttachments(new AttachmentProperties("preview.mp3", previewStream));
         }
 
-        await _client.ExecuteAsync(b);
+        await SendAllAsync(b);
 
         if (previewStream != null)
         {
             await previewStream.DisposeAsync();
         }
+    }
+
+    private async Task SendAllAsync(WebhookMessageProperties b)
+    {
+        WebhookClient[] nowClients;
+        lock (_clientsLocker)
+            nowClients = _clients.ToArray();
+
+        foreach (WebhookClient client in nowClients)
+        {
+            try
+            {
+                await client.ExecuteAsync(b);
+            }
+            catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await DeleteClientAsync(client, "имеет плохой токен");
+            }
+            catch (RestException re) when (re.StatusCode == HttpStatusCode.NotFound)
+            {
+                await DeleteClientAsync(client, "не существует");
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Не удалось отправить из-за непонятной ошибки");
+            }
+        }
+    }
+
+    private Task DeleteClientAsync(WebhookClient client, string reason)
+    {
+        Uri uri;
+        lock (_clientsLocker)
+        {
+            // Если уже удалили, то всё
+            if (!_clients.Remove(client))
+                return Task.CompletedTask;
+
+            // Всегда удаляем добавляем вместе, так что точно есть.
+            _clientToUri.Remove(client, out uri!);
+        }
+
+        if (_discordStorage.IsLocal(uri))
+        {
+            _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", client.Id, reason);
+
+            return _discordStorage.RemoveAsync(uri);
+        }
+
+        _logger.LogError("Вебхук {id} {reason}. Но он не локальный..", client.Id, reason);
+        return Task.CompletedTask;
     }
 
     private WebhookMessageProperties CreateDefaultBuilder(DiscordPostConfig? postConfig)

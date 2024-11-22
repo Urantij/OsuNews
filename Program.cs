@@ -20,6 +20,10 @@ public class Program
         {
             if (builder.Configuration.GetSection(DiscorderConfig.Path).Exists())
             {
+                builder.Services.AddSingleton<DiscordStorage>(serviceProvider =>
+                    new DiscordStorage("./DiscordWebhooks.json", serviceProvider.GetRequiredService<ILoggerFactory>()));
+                builder.Services.AddHostedService<DiscordStorage>(sp => sp.GetRequiredService<DiscordStorage>());
+
                 builder.Services.AddOptions<DiscorderConfig>()
                     .Bind(builder.Configuration.GetSection(DiscorderConfig.Path))
                     .ValidateOnStart();
@@ -71,6 +75,16 @@ public class Program
         builder.Services.AddHostedService<MainWorker>(sp => sp.GetRequiredService<MainWorker>());
 
         var host = builder.Build();
+
+        {
+            DiscorderConfig? config = host.Services.GetService<DiscorderConfig>();
+            if (config != null)
+            {
+                var storage = host.Services.GetRequiredService<DiscordStorage>();
+                storage.AddExternal(config.Hook);
+            }
+        }
+
         host.Run();
     }
 }
