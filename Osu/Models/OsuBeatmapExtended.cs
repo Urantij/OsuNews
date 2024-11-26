@@ -44,7 +44,7 @@ public class BeatmapsetExtended
 
     [JsonPropertyName("title_unicode")] public string TitleUnicode { get; set; }
 
-    [JsonPropertyName("track_id")] public int TrackId { get; set; }
+    [JsonPropertyName("track_id")] public int? TrackId { get; set; }
 
     [JsonPropertyName("user_id")] public int UserId { get; set; }
 
