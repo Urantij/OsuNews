@@ -92,6 +92,8 @@ public partial class Discorder : IHostedService, INewscaster
 
             _clientToUri[client] = target;
         }
+
+        _logger.LogInformation("Добавлено {count} хуков.", _clients.Count);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
