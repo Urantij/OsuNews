@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using OsuNews.Daily;
 using OsuNews.Main;
 using OsuNews.Map;
@@ -77,11 +78,11 @@ public class Program
         var host = builder.Build();
 
         {
-            DiscorderConfig? config = host.Services.GetService<DiscorderConfig>();
-            if (config != null)
+            IOptions<DiscorderConfig>? options = host.Services.GetService<IOptions<DiscorderConfig>>();
+            if (options != null)
             {
                 var storage = host.Services.GetRequiredService<DiscordStorage>();
-                storage.AddExternal(config.Hook);
+                storage.AddExternal(options.Value.Hook);
             }
         }
 
