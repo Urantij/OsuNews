@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -34,6 +35,8 @@ public partial class Discorder : IHostedService, INewscaster
     private readonly Dictionary<WebhookClient, Uri> _clientToUri = new();
 
     private readonly int _maxTitleLength = 256;
+
+    private readonly CultureInfo _cultureInfo = new("ru-RU", false);
 
     public Discorder(DiscordStorage discordStorage, IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
@@ -201,7 +204,9 @@ public partial class Discorder : IHostedService, INewscaster
             $"https://osu.ppy.sh/beatmapsets/{info.Game.CurrentPlaylistItem.Beatmap.BeatmapsetId}#{info.Game.CurrentPlaylistItem.Beatmap.Mode}/{info.Game.CurrentPlaylistItem.Beatmap.Id}");
         embedProperties.WithImage(
             new EmbedImageProperties(info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Covers.Cover2x));
-        embedProperties.WithFooter(new EmbedFooterProperties().WithText("помогите я застрял в холодильнике"));
+        embedProperties.WithFooter(
+            new EmbedFooterProperties().WithText(
+                $"Выложено {info.Map.Beatmapset.SubmittedDate.ToString("dd MMMM yyyy", _cultureInfo)}"));
 
         b.AddEmbeds(embedProperties);
 
