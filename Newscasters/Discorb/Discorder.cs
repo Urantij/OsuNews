@@ -176,14 +176,14 @@ public partial class Discorder : IHostedService, INewscaster
 
             if (info.TriedToAnalyze)
             {
-                sb.AppendLine();
-
                 if (info.Analyze == null)
                 {
+                    sb.AppendLine();
                     sb.AppendLine("Не удалось провести анализ.");
                 }
                 else if (info.Analyze.IsGandon == true)
                 {
+                    sb.AppendLine();
                     sb.AppendLine("Внимание, автор карты гандон.");
                 }
             }
