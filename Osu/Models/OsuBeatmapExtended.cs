@@ -7,7 +7,7 @@ public class Availability
     [JsonPropertyName("download_disabled")]
     public bool DownloadDisabled { get; set; }
 
-    [JsonPropertyName("more_information")] public object? MoreInformation { get; set; }
+    // [JsonPropertyName("more_information")] public object? MoreInformation { get; set; }
 }
 
 public class BeatmapsetExtended
@@ -22,7 +22,7 @@ public class BeatmapsetExtended
 
     [JsonPropertyName("favourite_count")] public int FavouriteCount { get; set; }
 
-    [JsonPropertyName("hype")] public object Hype { get; set; }
+    // [JsonPropertyName("hype")] public object Hype { get; set; }
 
     [JsonPropertyName("id")] public int Id { get; set; }
 
@@ -50,7 +50,7 @@ public class BeatmapsetExtended
 
     [JsonPropertyName("video")] public bool Video { get; set; }
 
-    [JsonPropertyName("bpm")] public int Bpm { get; set; }
+    [JsonPropertyName("bpm")] public double Bpm { get; set; }
 
     [JsonPropertyName("can_be_hyped")] public bool CanBeHyped { get; set; }
 
