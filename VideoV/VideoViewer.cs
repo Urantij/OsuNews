@@ -43,10 +43,17 @@ public class VideoViewer : BackgroundService
             {
                 latestVideoId = await _api.RequestAsync();
             }
-            catch (Exception e)
+            catch (Google.GoogleApiException apiException) when (apiException.Error.Errors.Any(err =>
+                                                                     err.Reason == "SERVICE_UNAVAILABLE"))
             {
-                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+                // Иногда сервис недоступен. Я не нашёл консту для этого сообщения.
+                // Статус код всегда 500. Не уверен, что стоит ловить именно код 500.
 
+                _logger.LogWarning("Не удалось забрать айди последнего видео, так как ютуб недоступен.");
+                continue;
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+            {
                 _logger.LogWarning(e, "Не удалось забрать айди последнего видео.");
                 continue;
             }
