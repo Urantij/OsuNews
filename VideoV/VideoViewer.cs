@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Extensions.Options;
 using OsuNews.MyTube;
 
@@ -43,11 +44,11 @@ public class VideoViewer : BackgroundService
             {
                 latestVideoId = await _api.RequestAsync();
             }
-            catch (Google.GoogleApiException apiException) when (apiException.Error.Errors.Any(err =>
-                                                                     err.Reason == "SERVICE_UNAVAILABLE"))
+            catch (Google.GoogleApiException apiException) when (apiException.HttpStatusCode == HttpStatusCode.InternalServerError)
             {
                 // Иногда сервис недоступен. Я не нашёл консту для этого сообщения.
                 // Статус код всегда 500. Не уверен, что стоит ловить именно код 500.
+                // Но с другой стороны, почему нет.
 
                 _logger.LogWarning("Не удалось забрать айди последнего видео, так как ютуб недоступен.");
                 continue;
