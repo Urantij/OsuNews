@@ -56,9 +56,12 @@ public partial class Discorder : IHostedService, INewscaster
         // А я думаю, почему у меня конструктор откисает
         // И нормальный асинхронный способ они не сделали. Браво.
         // И прокси никак не засунуть. Это невероятно.
+    }
 
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
         WebProxy? proxy = null;
-        if (options.Value.Proxy != null)
+        if (_config.Proxy != null)
         {
             _logger.LogInformation("Используем прокси.");
             proxy = new WebProxy(_config.Proxy);
@@ -91,16 +94,16 @@ public partial class Discorder : IHostedService, INewscaster
             string hookToken = match.Groups["token"].Value;
 
             WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
-            _clients.Add(client);
+            lock (_clientsLocker)
+            {
+                _clients.Add(client);
 
-            _clientToUri[client] = target;
+                _clientToUri[client] = target;
+            }
         }
 
         _logger.LogInformation("Добавлено {count} хуков.", _clients.Count);
-    }
 
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
         // _hook = await _client.GetAsync(cancellationToken: cancellationToken);
         return Task.CompletedTask;
     }
