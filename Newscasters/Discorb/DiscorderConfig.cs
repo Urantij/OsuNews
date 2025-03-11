@@ -4,13 +4,15 @@ public class DiscordPostConfig
 {
     public string? Name { get; set; }
     public string? AvatarUrl { get; set; }
+    public bool Post { get; set; } = true;
 
     public static DiscordPostConfig CreateDefault()
     {
         return new DiscordPostConfig()
         {
             Name = "Osu News",
-            AvatarUrl = null
+            AvatarUrl = null,
+            Post = true,
         };
     }
 }
