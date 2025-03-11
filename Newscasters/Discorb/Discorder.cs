@@ -126,6 +126,7 @@ public partial class Discorder : IHostedService, INewscaster
 
         _logger.LogInformation("Добавлено {count} хуков.", count);
 
+
         return Task.CompletedTask;
     }
 
