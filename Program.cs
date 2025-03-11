@@ -72,6 +72,9 @@ public class Program
             }
         }
 
+        // Этой локализации не хватает пары классов из гайда. Алсо у ресурс менеджера есть автодополнение.
+        // builder.Services.AddLocalization(s => s.ResourcesPath = "Resources");
+
         builder.Services.AddSingleton<MainWorker>();
         builder.Services.AddHostedService<MainWorker>(sp => sp.GetRequiredService<MainWorker>());
 
@@ -82,7 +85,14 @@ public class Program
             if (options != null)
             {
                 var storage = host.Services.GetRequiredService<DiscordStorage>();
-                storage.AddExternal(options.Value.Hook);
+                storage.AddExternal(new DiscordHookConfig()
+                {
+                    Uri = options.Value.Hook,
+                    Video = options.Value.Video,
+                    Daily = options.Value.Daily,
+                    Language = "ru",
+                    Note = "Main"
+                });
             }
         }
 

@@ -7,10 +7,11 @@ using NetCord.Rest;
 using OsuNews.MyLittleStorage;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
+using OsuNews.Resources;
 
 namespace OsuNews.Newscasters.Discorb;
 
-public class DiscordStorage : MyStorage<Uri>
+public class DiscordStorage : MyStorage<DiscordHookConfig>
 {
     public DiscordStorage(string path, ILoggerFactory loggerFactory) : base(path, loggerFactory)
     {
@@ -19,6 +20,13 @@ public class DiscordStorage : MyStorage<Uri>
 
 public partial class Discorder : IHostedService, INewscaster
 {
+    class Hook(WebhookClient client, DiscordHookConfig config, CultureInfo cultureInfo)
+    {
+        public WebhookClient Client { get; } = client;
+        public DiscordHookConfig Config { get; } = config;
+        public CultureInfo CultureInfo { get; } = cultureInfo;
+    }
+
     // https://discord.com/api/webhooks/1234356456/a-asd132_4sdf3-asd3234
     private static readonly Regex WebhookUriRegex = MyWebHookRegex();
 
@@ -26,17 +34,11 @@ public partial class Discorder : IHostedService, INewscaster
     private readonly ILogger<Discorder> _logger;
     private readonly DiscorderConfig _config;
 
-    private readonly Lock _clientsLocker = new();
-
-    private readonly List<WebhookClient> _clients = new();
-
-    // клянусь я хотел сделать кансер но нормально
-    // но я устау)
-    private readonly Dictionary<WebhookClient, Uri> _clientToUri = new();
+    private readonly List<Hook> _hooks = new();
 
     private readonly int _maxTitleLength = 256;
 
-    private readonly CultureInfo _cultureInfo = new("ru-RU", false);
+    private readonly CultureInfo _defaultCultureInfo = new("ru-RU", false);
 
     public Discorder(DiscordStorage discordStorage, IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
@@ -56,9 +58,12 @@ public partial class Discorder : IHostedService, INewscaster
         // А я думаю, почему у меня конструктор откисает
         // И нормальный асинхронный способ они не сделали. Браво.
         // И прокси никак не засунуть. Это невероятно.
+    }
 
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
         WebProxy? proxy = null;
-        if (options.Value.Proxy != null)
+        if (_config.Proxy != null)
         {
             _logger.LogInformation("Используем прокси.");
             proxy = new WebProxy(_config.Proxy);
@@ -79,29 +84,48 @@ public partial class Discorder : IHostedService, INewscaster
             };
         }
 
-        Uri[] targets = _discordStorage.GetAll();
-        foreach (Uri target in targets)
+        DiscordHookConfig[] targets = _discordStorage.GetAll();
+        foreach (DiscordHookConfig target in targets)
         {
             // Странно, что у них нет хелпера под это. А если и есть, то найти его я не смог. Документации нет.
-            Match match = WebhookUriRegex.Match(target.ToString());
+            Match match = WebhookUriRegex.Match(target.Uri.ToString());
             if (!match.Success)
-                throw new Exception($"Не удалось пропарсить хук юрл. {target}");
+            {
+                _logger.LogWarning("Не удалось пропарсить хук юрл. {Note}", target.Note ?? target.Uri.ToString());
+                continue;
+            }
 
             ulong hookId = ulong.Parse(match.Groups["id"].Value);
             string hookToken = match.Groups["token"].Value;
 
-            WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
-            _clients.Add(client);
+            CultureInfo? cultureInfo = null;
+            if (target.Language != null)
+            {
+                try
+                {
+                    cultureInfo = CultureInfo.GetCultureInfo(target.Language);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning("Не удалось пропарсить язык. {Note}", target.Note ?? hookId.ToString());
+                }
+            }
 
-            _clientToUri[client] = target;
+            cultureInfo ??= _defaultCultureInfo;
+
+            WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
+            lock (_hooks)
+            {
+                _hooks.Add(new Hook(client, target, cultureInfo));
+            }
         }
 
-        _logger.LogInformation("Добавлено {count} хуков.", _clients.Count);
-    }
+        int count;
+        lock (_hooks)
+            count = _hooks.Count;
 
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        // _hook = await _client.GetAsync(cancellationToken: cancellationToken);
+        _logger.LogInformation("Добавлено {count} хуков.", count);
+
         return Task.CompletedTask;
     }
 
@@ -110,17 +134,49 @@ public partial class Discorder : IHostedService, INewscaster
         return Task.CompletedTask;
     }
 
-    public Task TellThemAboutVideoAsync(string videoId)
+    public async Task TellThemAboutVideoAsync(string videoId)
     {
-        WebhookMessageProperties b = CreateDefaultBuilder(_config.Video)
-            .WithContent($"Вышел новый видик!!! https://youtu.be/{videoId}");
+        Hook[] hooks;
+        lock (_hooks)
+            hooks = _hooks.ToArray();
 
-        return SendAllAsync(b);
+        foreach (Hook hook in hooks)
+        {
+            DiscordPostConfig postConfig = hook.Config.Video ?? _config.Video ?? _config.Default;
+
+            if (!postConfig.Post)
+                continue;
+
+            WebhookMessageProperties b = CreateDefaultBuilder(postConfig)
+                .WithContent(
+                    $"{Lines.ResourceManager.GetString("NewVideoPostTitle", hook.CultureInfo)} https://youtu.be/{videoId}");
+
+            await SendAsync(hook, b);
+        }
     }
 
     public async Task TellThemAboutDailyAsync(OsuFullDailyInfo info)
     {
-        WebhookMessageProperties b = CreateDefaultBuilder(_config.Daily);
+        Hook[] hooks;
+        lock (_hooks)
+            hooks = _hooks.ToArray();
+
+        foreach (Hook hook in hooks)
+        {
+            DiscordPostConfig postConfig = hook.Config.Daily ?? _config.Daily ?? _config.Default;
+
+            if (!postConfig.Post)
+                continue;
+
+            WebhookMessageProperties b = FormDailyMessage(info, postConfig, hook);
+
+            await SendAsync(hook, b);
+        }
+    }
+
+    private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, DiscordPostConfig config, Hook hook)
+    {
+        WebhookMessageProperties b = CreateDefaultBuilder(config);
 
         EmbedProperties embedProperties = new();
 
@@ -146,15 +202,16 @@ public partial class Discorder : IHostedService, INewscaster
             TimeSpan length = TimeSpan.FromSeconds(info.Map.TotalLength);
 
             sb.AppendLine(
-                $"**Сложность:** **__{info.Game.CurrentPlaylistItem.Beatmap.Version}__** ({info.Map.DifficultyRating:F1}\\*)");
+                $"**{Lines.ResourceManager.GetString("Difficulty", hook.CultureInfo)}:** **__{info.Game.CurrentPlaylistItem.Beatmap.Version}__** ({info.Map.DifficultyRating:F1}\\*)");
 
-            sb.Append($@"**Время:** {length:mm\:ss}");
+            sb.Append($@"**{Lines.ResourceManager.GetString("Length", hook.CultureInfo)}:** {length:mm\:ss}");
             sb.AppendLine($" **BPM:** {info.Map.Bpm}");
             sb.AppendLine();
 
             if (info.Game.CurrentPlaylistItem.Beatmap.Mode != "osu")
             {
-                sb.AppendLine($"Абалдеть, это {info.Game.CurrentPlaylistItem.Beatmap.Mode}");
+                sb.AppendLine(
+                    $"{Lines.ResourceManager.GetString("NonStdMod", hook.CultureInfo)} {info.Game.CurrentPlaylistItem.Beatmap.Mode}");
                 sb.AppendLine();
             }
 
@@ -166,7 +223,7 @@ public partial class Discorder : IHostedService, INewscaster
             if (info.Game.CurrentPlaylistItem.RequiredMods.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Установлены моды:");
+                sb.AppendLine($"{Lines.ResourceManager.GetString("ForcedMods", hook.CultureInfo)}:");
                 foreach (OsuMod mod in info.Game.CurrentPlaylistItem.RequiredMods)
                 {
                     sb.AppendLine($"**{mod.Acronym}**");
@@ -182,19 +239,19 @@ public partial class Discorder : IHostedService, INewscaster
                 if (info.Analyze == null)
                 {
                     sb.AppendLine();
-                    sb.AppendLine("Не удалось провести анализ.");
+                    sb.AppendLine($"{Lines.ResourceManager.GetString("CouldntAnalyze", hook.CultureInfo)}.");
                 }
                 else if (info.Analyze.IsGandon == true)
                 {
                     sb.AppendLine();
-                    sb.AppendLine("Внимание, автор карты гандон.");
+                    sb.AppendLine($"{Lines.ResourceManager.GetString("GandonSpotted", hook.CultureInfo)}.");
                 }
             }
 
             if (info.TriedToPreview && info.PreviewContent == null)
             {
                 sb.AppendLine();
-                sb.AppendLine("Не удалось загрузить превью.");
+                sb.AppendLine($"{Lines.ResourceManager.GetString("UnableToDownloadPreview", hook.CultureInfo)}.");
             }
 
             embedProperties.WithDescription(sb.ToString());
@@ -206,82 +263,61 @@ public partial class Discorder : IHostedService, INewscaster
             new EmbedImageProperties(info.Game.CurrentPlaylistItem.Beatmap.Beatmapset.Covers.Cover2x));
         embedProperties.WithFooter(
             new EmbedFooterProperties().WithText(
-                $"Выложено {info.Map.Beatmapset.SubmittedDate.ToString("dd MMMM yyyy", _cultureInfo)}"));
+                $"{Lines.ResourceManager.GetString("MapUploaded", hook.CultureInfo)} {info.Map.Beatmapset.SubmittedDate.ToString("dd MMMM yyyy", hook.CultureInfo)}"));
 
         b.AddEmbeds(embedProperties);
 
-        MemoryStream? previewStream = null;
         if (info.TriedToPreview && info.PreviewContent != null)
         {
-            previewStream = new MemoryStream(info.PreviewContent);
+            MemoryStream previewStream = new(info.PreviewContent);
             // TODO возможно, стоит название вывести отдельно. Мож там быть не мп3?
             b.AddAttachments(new AttachmentProperties("preview.mp3", previewStream));
         }
 
-        await SendAllAsync(b);
+        return b;
+    }
 
-        if (previewStream != null)
+    private async Task SendAsync(Hook hook, WebhookMessageProperties b)
+    {
+        try
         {
-            await previewStream.DisposeAsync();
+            await hook.Client.ExecuteAsync(b);
+        }
+        catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await DeleteClientAsync(hook, "имеет плохой токен");
+        }
+        catch (RestException re) when (re.StatusCode == HttpStatusCode.NotFound)
+        {
+            await DeleteClientAsync(hook, "не существует");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Не удалось отправить из-за непонятной ошибки");
         }
     }
 
-    private async Task SendAllAsync(WebhookMessageProperties b)
+    private Task DeleteClientAsync(Hook hook, string reason)
     {
-        WebhookClient[] nowClients;
-        lock (_clientsLocker)
-            nowClients = _clients.ToArray();
-
-        foreach (WebhookClient client in nowClients)
+        if (_discordStorage.IsLocal(hook.Config))
         {
-            try
-            {
-                await client.ExecuteAsync(b);
-            }
-            catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                await DeleteClientAsync(client, "имеет плохой токен");
-            }
-            catch (RestException re) when (re.StatusCode == HttpStatusCode.NotFound)
-            {
-                await DeleteClientAsync(client, "не существует");
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Не удалось отправить из-за непонятной ошибки");
-            }
-        }
-    }
+            _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", hook.Config.Note ?? hook.Client.Id.ToString(),
+                reason);
 
-    private Task DeleteClientAsync(WebhookClient client, string reason)
-    {
-        Uri uri;
-        lock (_clientsLocker)
-        {
-            // Если уже удалили, то всё
-            if (!_clients.Remove(client))
-                return Task.CompletedTask;
-
-            // Всегда удаляем добавляем вместе, так что точно есть.
-            _clientToUri.Remove(client, out uri!);
+            return _discordStorage.RemoveAsync(hook.Config);
         }
 
-        if (_discordStorage.IsLocal(uri))
-        {
-            _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", client.Id, reason);
+        _logger.LogError("Вебхук {id} {reason}. Но он не локальный..", hook.Config.Note ?? hook.Client.Id.ToString(),
+            reason);
 
-            return _discordStorage.RemoveAsync(uri);
-        }
-
-        _logger.LogError("Вебхук {id} {reason}. Но он не локальный..", client.Id, reason);
         return Task.CompletedTask;
     }
 
-    private WebhookMessageProperties CreateDefaultBuilder(DiscordPostConfig? postConfig)
+    private WebhookMessageProperties CreateDefaultBuilder(DiscordPostConfig postConfig)
     {
         return new WebhookMessageProperties()
-            .WithUsername(postConfig?.Name ?? _config.Default.Name ?? "Osu News")
-            .WithAvatarUrl(postConfig?.AvatarUrl ?? _config.Default.AvatarUrl);
+            .WithUsername(postConfig.Name ?? "Osu News")
+            .WithAvatarUrl(postConfig.AvatarUrl);
     }
 
     [GeneratedRegex(@"https://discord.com/api/webhooks/(?<id>\d+)/(?<token>.+)$", RegexOptions.Compiled)]

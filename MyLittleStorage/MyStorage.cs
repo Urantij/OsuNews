@@ -2,6 +2,7 @@ using System.Text.Json;
 
 namespace OsuNews.MyLittleStorage;
 
+// Аааа зачем я всё это сделал?
 public class MyStorage<T> : IHostedService
 {
     private readonly string _path;
