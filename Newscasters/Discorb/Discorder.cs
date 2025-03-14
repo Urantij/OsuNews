@@ -40,17 +40,13 @@ public partial class Discorder : IHostedService, INewscaster
 
     private readonly CultureInfo _defaultCultureInfo = new("ru-RU", false);
 
+    private readonly DiscordPostConfig _defaultPostConfig = DiscordPostConfig.CreateDefault();
+
     public Discorder(DiscordStorage discordStorage, IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
     {
         _discordStorage = discordStorage;
         _logger = loggerFactory.CreateLogger<Discorder>();
         _config = options.Value;
-
-        if (_config.Default is null)
-        {
-            _logger.LogWarning("Попытка убить приложение через нул дефолт конфиг дискорда.");
-            _config.Default = DiscordPostConfig.CreateDefault();
-        }
 
         // Я крайне удивлён.
         // Я юзал Discord.Net для вебхук клиента
@@ -105,7 +101,7 @@ public partial class Discorder : IHostedService, INewscaster
                 {
                     cultureInfo = CultureInfo.GetCultureInfo(target.Language);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     _logger.LogWarning("Не удалось пропарсить язык. {Note}", target.Note ?? hookId.ToString());
                 }
@@ -143,12 +139,12 @@ public partial class Discorder : IHostedService, INewscaster
 
         foreach (Hook hook in hooks)
         {
-            DiscordPostConfig postConfig = hook.Config.Video ?? _config.Video ?? _config.Default;
+            bool post = GetFirstVideo(hook, config => config.Post);
 
-            if (!postConfig.Post)
+            if (!post)
                 continue;
 
-            WebhookMessageProperties b = CreateDefaultBuilder(postConfig)
+            WebhookMessageProperties b = CreateDefaultBuilder(GetVideoConfigs(hook))
                 .WithContent(
                     $"{Lines.ResourceManager.GetString("NewVideoPostTitle", hook.CultureInfo)} https://youtu.be/{videoId}");
 
@@ -164,20 +160,20 @@ public partial class Discorder : IHostedService, INewscaster
 
         foreach (Hook hook in hooks)
         {
-            DiscordPostConfig postConfig = hook.Config.Daily ?? _config.Daily ?? _config.Default;
+            bool post = GetFirstDaily(hook, config => config.Post);
 
-            if (!postConfig.Post)
+            if (!post)
                 continue;
 
-            WebhookMessageProperties b = FormDailyMessage(info, postConfig, hook);
+            WebhookMessageProperties b = FormDailyMessage(info, hook);
 
             await SendAsync(hook, b);
         }
     }
 
-    private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, DiscordPostConfig config, Hook hook)
+    private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, Hook hook)
     {
-        WebhookMessageProperties b = CreateDefaultBuilder(config);
+        WebhookMessageProperties b = CreateDefaultBuilder(GetDailyConfigs(hook));
 
         EmbedProperties embedProperties = new();
 
@@ -314,11 +310,58 @@ public partial class Discorder : IHostedService, INewscaster
         return Task.CompletedTask;
     }
 
-    private WebhookMessageProperties CreateDefaultBuilder(DiscordPostConfig postConfig)
+    private WebhookMessageProperties CreateDefaultBuilder(params DiscordPostConfig?[] postConfigs)
     {
+        string? name = GetFirst(config => config.Name, postConfigs);
+        string? avatarUrl = GetFirst(config => config.AvatarUrl, postConfigs);
+
         return new WebhookMessageProperties()
-            .WithUsername(postConfig.Name ?? "Osu News")
-            .WithAvatarUrl(postConfig.AvatarUrl);
+            .WithUsername(name ?? "Osu News")
+            .WithAvatarUrl(avatarUrl);
+    }
+
+    private T? GetFirstDaily<T>(Hook hook, Func<DiscordPostConfig, T> extract)
+    {
+        return GetFirst(extract, GetDailyConfigs(hook));
+    }
+
+    private T? GetFirstVideo<T>(Hook hook, Func<DiscordPostConfig, T> extract)
+    {
+        return GetFirst(extract, GetVideoConfigs(hook));
+    }
+
+    private DiscordPostConfig?[] GetDailyConfigs(Hook hook)
+    {
+        return
+        [
+            hook.Config.Daily, hook.Config.Default, _config.Daily, _config.Default,
+            _defaultPostConfig
+        ];
+    }
+
+    private DiscordPostConfig?[] GetVideoConfigs(Hook hook)
+    {
+        return
+        [
+            hook.Config.Video, hook.Config.Default, _config.Video, _config.Default,
+            _defaultPostConfig
+        ];
+    }
+
+    private static TResult? GetFirst<TTarget, TResult>(Func<TTarget, TResult?> extract, params TTarget?[] from)
+    {
+        foreach (TTarget? target in from)
+        {
+            if (target == null)
+                continue;
+
+            TResult? result = extract(target);
+
+            if (result != null)
+                return result;
+        }
+
+        return default;
     }
 
     [GeneratedRegex(@"https://discord.com/api/webhooks/(?<id>\d+)/(?<token>.+)$", RegexOptions.Compiled)]

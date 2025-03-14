@@ -24,8 +24,7 @@ public class DiscorderConfig
     public required Uri Hook { get; set; }
     public string? Proxy { get; set; }
 
-    public DiscordPostConfig Default { get; set; } = DiscordPostConfig.CreateDefault();
-
+    public DiscordPostConfig? Default { get; set; }
     public DiscordPostConfig? Daily { get; set; }
     public DiscordPostConfig? Video { get; set; }
 }
