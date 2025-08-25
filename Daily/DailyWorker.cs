@@ -80,7 +80,20 @@ public class DailyWorker : BackgroundService
             }
             catch (Exception e)
             {
-                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+                if (e is JsonException jsonException)
+                {
+                    if (jsonException.Data.Contains("ResponseContent"))
+                    {
+                        string? data = jsonException.Data["ResponseContent"] as string;
+
+                        _logger.LogWarning("Сообщение от лысого вместо дейлика: \"{data}\"", data);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("jsonException но даты не нашлось");
+                    }
+                }
+                else if (e is not (HttpRequestException or TaskCanceledException)) throw;
 
                 _logger.LogWarning(e, "Не удалось загрузить дейлик.");
 

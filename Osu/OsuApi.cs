@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Web;
 using Microsoft.Extensions.Options;
 using OsuNews.Osu.Models;
@@ -90,6 +91,7 @@ public class OsuApi : IDisposable
     /// </summary>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="System.Text.Json.JsonException">Однажды и такое случилось. В <see cref="Exception.Data"/> под ключом "ResponseContent" будет лежать строка сообщения.</exception>
     public async Task<OsuGame?> GetDailyAsync()
     {
         _logger.LogDebug("Просим информацию...");
@@ -107,9 +109,19 @@ public class OsuApi : IDisposable
         HttpResponseMessage responseMessage =
             await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 
-        OsuGame? content = (await responseMessage.Content.ReadFromJsonAsync<OsuGame[]>()).FirstOrDefault();
+        // TODO нужно проверять статус код? Но не знаю, какой юзать..
 
-        return content;
+        string content = await responseMessage.Content.ReadAsStringAsync();
+
+        try
+        {
+            return JsonSerializer.Deserialize<OsuGame[]>(content).FirstOrDefault();
+        }
+        catch (JsonException jsonException)
+        {
+            jsonException.Data["ResponseContent"] = content;
+            throw;
+        }
     }
 
     /// <summary>
