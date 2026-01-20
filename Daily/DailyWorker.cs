@@ -6,6 +6,7 @@ using OsuNews.Map.Models;
 using OsuNews.Map.Parse;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
+using OsuNews.Osu.Models.Set;
 
 namespace OsuNews.Daily;
 
@@ -180,6 +181,8 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
+            OsuTagData[] tags = await LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
+
             MapAnalyzeResult? analyzeResult = null;
             bool triedToAnalyze = false;
             if (_config.DoAnalyze)
@@ -218,7 +221,8 @@ public class DailyWorker : BackgroundService
                 }
             }
 
-            OsuFullDailyInfo info = new(daily, beatmap, analyzeResult, triedToAnalyze, previewContent, triedToPreview);
+            OsuFullDailyInfo info = new(daily, beatmap, tags, analyzeResult, triedToAnalyze, previewContent,
+                triedToPreview);
             _lastDailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime());
             {
                 string content = JsonSerializer.Serialize(_lastDailyCache);
@@ -226,6 +230,52 @@ public class DailyWorker : BackgroundService
             }
 
             NewDaily?.Invoke(info);
+        }
+    }
+
+    private async Task<OsuTagData[]> LoadTagsAsync(ulong beatmapSetId, ulong beatmapId)
+    {
+        try
+        {
+            OsuBeatmapSet beatmapSet = await _api.GetBeatmapSetAsync(beatmapSetId);
+
+            OsuBeatmap? map = beatmapSet.Beatmaps.FirstOrDefault(b => b.Id == beatmapId);
+
+            if (map == null)
+            {
+                _logger.LogWarning("В сете не нашлось карты, лол");
+                return [];
+            }
+
+            return map.TagIds
+                .Select(tagId =>
+                    new
+                    {
+                        tagId,
+                        relatedTag = beatmapSet.RelatedTags.FirstOrDefault(related => related.Id == tagId.TagId)
+                    })
+                .Where(an =>
+                {
+                    if (an.relatedTag == null)
+                    {
+                        _logger.LogWarning("Не нашли рилейтед тег, ого {id}", an.tagId.TagId);
+                        return false;
+                    }
+
+                    return true;
+                })
+                .Select(an => new OsuTagData(an.tagId.TagId, an.relatedTag.Name, an.tagId.Count))
+                .ToArray();
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Не удалось загрузить сет.");
+            if (e is not (HttpRequestException or TaskCanceledException))
+            {
+                _logger.LogWarning(e, "Специфичная ошибка");
+            }
+
+            return [];
         }
     }
 }

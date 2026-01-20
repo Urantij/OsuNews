@@ -5,11 +5,15 @@ using System.Text.Json;
 using System.Web;
 using Microsoft.Extensions.Options;
 using OsuNews.Osu.Models;
+using OsuNews.Osu.Models.Set;
 
 namespace OsuNews.Osu;
 
 public class OsuApi : IDisposable
 {
+    // эээ)
+    public const int TagCountsToCount = 5;
+
     private readonly ILogger<OsuApi> _logger;
     private readonly OsuConfig _config;
 
@@ -143,6 +147,31 @@ public class OsuApi : IDisposable
             await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 
         return await responseMessage.Content.ReadFromJsonAsync<OsuBeatmapExtended>();
+    }
+
+    // юзертегов нет в https://osu.ppy.sh/api/v2/beatmaps/ :)
+    // возможно тут есть вся инфа что и в методе выше, но мне впадлу проверять, слишком тупо всё это
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="beatmapSetId"></param>
+    /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    public async Task<OsuBeatmapSet> GetBeatmapSetAsync(ulong beatmapSetId)
+    {
+        _logger.LogDebug("Просим сет...");
+
+        using var requestMessage =
+            new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/beatmapsets/{beatmapSetId}");
+
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        requestMessage.Headers.Add("x-api-version", "20240923");
+
+        HttpResponseMessage responseMessage =
+            await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
+
+        return await responseMessage.Content.ReadFromJsonAsync<OsuBeatmapSet>();
     }
 
     // Этому здесь не совсем место (совсем не), но делать ещё один сервис ради этого мне впадлу.
