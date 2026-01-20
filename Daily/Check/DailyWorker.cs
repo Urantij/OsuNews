@@ -9,7 +9,7 @@ using OsuNews.Osu;
 using OsuNews.Osu.Models;
 using OsuNews.Osu.Models.Set;
 
-namespace OsuNews.Daily.DailyCheck;
+namespace OsuNews.Daily.Check;
 
 public class DailyWorker : BackgroundService
 {
