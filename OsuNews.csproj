@@ -8,41 +8,45 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Google.Apis.YouTube.v3" Version="1.73.0.4029" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
-        <PackageReference Include="NetCord" Version="1.0.0-alpha.339" />
+        <PackageReference Include="Google.Apis.YouTube.v3" Version="1.73.0.4029"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2"/>
+        <PackageReference Include="NetCord" Version="1.0.0-alpha.339"/>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\Lines.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>Lines.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
-      <EmbeddedResource Update="Resources\Lines.ru.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>Lines.ru.Designer.cs</LastGenOutput>
-      </EmbeddedResource>
+        <EmbeddedResource Update="Resources\Lines.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>Lines.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
+        <EmbeddedResource Update="Resources\Lines.ru.resx">
+            <Generator>ResXFileCodeGenerator</Generator>
+            <LastGenOutput>Lines.ru.Designer.cs</LastGenOutput>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Resources\Lines.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Lines.resx</DependentUpon>
-      </Compile>
-      <Compile Update="Resources\Lines.ru.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Lines.ru.resx</DependentUpon>
-      </Compile>
+        <Compile Update="Resources\Lines.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>Lines.resx</DependentUpon>
+        </Compile>
+        <Compile Update="Resources\Lines.ru.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>Lines.ru.resx</DependentUpon>
+        </Compile>
     </ItemGroup>
 
     <ItemGroup>
-      <Content Remove="Newscasters\Discorb\embedexample.json" />
-      <None Include="Newscasters\Discorb\embedexample.json" />
-      <Content Remove="appsettings.example.json" />
-      <None Include="appsettings.example.json" />
-      <Content Remove="DiscordWebhooks.example.json" />
-      <None Include="DiscordWebhooks.example.json" />
+        <Content Remove="Newscasters\Discorb\embedexample.json"/>
+        <None Include="Newscasters\Discorb\embedexample.json"/>
+        <Content Remove="appsettings.example.json"/>
+        <None Include="appsettings.example.json"/>
+        <Content Remove="DiscordWebhooks.example.json"/>
+        <None Include="DiscordWebhooks.example.json"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Daily\TagsUpdater\"/>
     </ItemGroup>
 </Project>

@@ -197,7 +197,7 @@ public partial class Discorder : IHostedService, INewscaster
             StringBuilder sb = new();
 
             // у меня была мысль, что разные челы могут хотеть разный трешхолд, но мне стало впадлу и в целом похуй
-            if (info.Tags.Length > 0)
+            if (info.Tags?.Length > 0)
             {
                 OsuTagData[] realTags = info.Tags.Where(tag => tag.Count >= OsuApi.TagCountsToCount).ToArray();
                 if (realTags.Length > 0)

@@ -1,4 +1,4 @@
-using OsuNews.Daily;
+using OsuNews.Daily.DailyCheck;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
 using OsuNews.VideoV;

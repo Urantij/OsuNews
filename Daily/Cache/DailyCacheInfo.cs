@@ -1,3 +1,5 @@
+using OsuNews.Osu;
+
 namespace OsuNews.Daily;
 
 /// <summary>
@@ -5,7 +7,8 @@ namespace OsuNews.Daily;
 /// </summary>
 /// <param name="id"></param>
 /// <param name="endDate"></param>
-public class DailyCacheInfo(ulong id, DateTime endDate)
+/// <param name="tags"></param>
+public class DailyCacheInfo(ulong id, DateTime endDate, OsuTagData[]? tags)
 {
     /// <summary>
     /// Айди дейлика в осу (плейлист, не мапа)
@@ -16,4 +19,9 @@ public class DailyCacheInfo(ulong id, DateTime endDate)
     /// Когда плейлист дейлика закрывается
     /// </summary>
     public DateTime EndDate { get; set; } = endDate;
+
+    /// <summary>
+    /// Юзер теги
+    /// </summary>
+    public OsuTagData[]? Tags { get; set; } = tags;
 }

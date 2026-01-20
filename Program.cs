@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
 using OsuNews.Daily;
+using OsuNews.Daily.Cache;
+using OsuNews.Daily.DailyCheck;
 using OsuNews.Main;
 using OsuNews.Map;
 using OsuNews.MyTube;
@@ -68,6 +70,8 @@ public class Program
                     .Bind(builder.Configuration.GetSection(DailyConfig.Path))
                     .ValidateOnStart();
 
+                builder.Services.AddSingleton<DailyCacheStore>();
+                builder.Services.AddHostedService<DailyCacheStore>(sp => sp.GetRequiredService<DailyCacheStore>());
                 builder.Services.AddSingleton<DailyWorker>();
                 builder.Services.AddHostedService<DailyWorker>(sp => sp.GetRequiredService<DailyWorker>());
             }

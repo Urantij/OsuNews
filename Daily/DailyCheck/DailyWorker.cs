@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using OsuNews.Daily.Cache;
 using OsuNews.Map;
 using OsuNews.Map.Analyze;
 using OsuNews.Map.Models;
@@ -8,37 +9,30 @@ using OsuNews.Osu;
 using OsuNews.Osu.Models;
 using OsuNews.Osu.Models.Set;
 
-namespace OsuNews.Daily;
+namespace OsuNews.Daily.DailyCheck;
 
 public class DailyWorker : BackgroundService
 {
     private readonly OsuApi _api;
     private readonly MapDownloader _mapDownloader;
+    private readonly DailyCacheStore _store;
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
 
-    private DailyCacheInfo? _lastDailyCache;
-
     public event Action<OsuFullDailyInfo>? NewDaily;
 
-    public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<DailyConfig> options,
+    public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<DailyConfig> options, DailyCacheStore store,
         ILogger<DailyWorker> logger)
     {
         _api = api;
         _mapDownloader = mapDownloader;
+        _store = store;
         _logger = logger;
         _config = options.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (File.Exists(_config.CachePath))
-        {
-            string content = await File.ReadAllTextAsync(_config.CachePath, stoppingToken);
-
-            _lastDailyCache = JsonSerializer.Deserialize<DailyCacheInfo>(content);
-        }
-
         // Я не знаю, как сделать так, чтобы этот сервис запускался после мейна
         // Если не ждать, мейн может не успеть подписаться на new ивент. Не знаю.
         try
@@ -116,11 +110,11 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            if (_lastDailyCache?.Id == daily.Id)
+            if (_store.LastDailyCache?.Id == daily.Id)
             {
                 TimeSpan wait;
 
-                if (DateTime.UtcNow > _lastDailyCache.EndDate)
+                if (DateTime.UtcNow > _store.LastDailyCache.EndDate)
                 {
                     wait = _config.ActiveCheck;
                 }
@@ -131,9 +125,9 @@ public class DailyWorker : BackgroundService
                     // Если активное время наступает раньше конца пассивной проверки
                     // Проверим при наступлении активного времени + ожидание чека
 
-                    if (DateTime.UtcNow + wait >= _lastDailyCache.EndDate)
+                    if (DateTime.UtcNow + wait >= _store.LastDailyCache.EndDate)
                     {
-                        wait = (_lastDailyCache.EndDate - DateTime.UtcNow) + _config.ActiveCheck;
+                        wait = (_store.LastDailyCache.EndDate - DateTime.UtcNow) + _config.ActiveCheck;
                     }
                 }
 
@@ -181,7 +175,7 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            OsuTagData[] tags = await LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
+            OsuTagData[]? tags = await LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
 
             MapAnalyzeResult? analyzeResult = null;
             bool triedToAnalyze = false;
@@ -223,17 +217,14 @@ public class DailyWorker : BackgroundService
 
             OsuFullDailyInfo info = new(daily, beatmap, tags, analyzeResult, triedToAnalyze, previewContent,
                 triedToPreview);
-            _lastDailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime());
-            {
-                string content = JsonSerializer.Serialize(_lastDailyCache);
-                await File.WriteAllTextAsync(_config.CachePath, content, stoppingToken);
-            }
+            DailyCacheInfo dailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime(), tags);
+            await _store.OverwriteCacheAsync(dailyCache);
 
             NewDaily?.Invoke(info);
         }
     }
 
-    private async Task<OsuTagData[]> LoadTagsAsync(ulong beatmapSetId, ulong beatmapId)
+    private async Task<OsuTagData[]?> LoadTagsAsync(ulong beatmapSetId, ulong beatmapId)
     {
         try
         {
@@ -244,7 +235,7 @@ public class DailyWorker : BackgroundService
             if (map == null)
             {
                 _logger.LogWarning("В сете не нашлось карты, лол");
-                return [];
+                return null;
             }
 
             return map.TagIds
@@ -275,7 +266,7 @@ public class DailyWorker : BackgroundService
                 _logger.LogWarning(e, "Специфичная ошибка");
             }
 
-            return [];
+            return null;
         }
     }
 }
