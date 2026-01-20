@@ -1,0 +1,27 @@
+{
+  "content": "",
+  "tts": false,
+  "embeds": [
+    {
+      "id": 984098505,
+      "description": "**Сложность:** **sentiments** (6.0*)\n**Время:** 02:36 **BPM:** 174\n\n**OD**: 9.0 **HP**: 6.0 **CS**: 4.0 **AR**: 9.3",
+      "fields": [],
+      "author": {
+        "name": "rrtyui",
+        "url": "https://google.com"
+      },
+      "title": "kanone - The Sea of Memory",
+      "url": "https://google.com",
+      "image": {
+        "url": "https://assets.ppy.sh/beatmaps/395278/covers/cover@2x.jpg?1631507985"
+      },
+      "footer": {
+        "text": "Выложено 22 декабря 2015"
+      }
+    }
+  ],
+  "components": [],
+  "actions": {},
+  "flags": 0,
+  "username": "bot"
+}
