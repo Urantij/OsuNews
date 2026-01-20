@@ -40,5 +40,9 @@
     <ItemGroup>
       <Content Remove="Newscasters\Discorb\embedexample.json" />
       <None Include="Newscasters\Discorb\embedexample.json" />
+      <Content Remove="appsettings.example.json" />
+      <None Include="appsettings.example.json" />
+      <Content Remove="DiscordWebhooks.example.json" />
+      <None Include="DiscordWebhooks.example.json" />
     </ItemGroup>
 </Project>
