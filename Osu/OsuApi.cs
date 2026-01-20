@@ -9,6 +9,12 @@ using OsuNews.Osu.Models.Set;
 
 namespace OsuNews.Osu;
 
+class AccessTokenData(string token, DateTimeOffset expireDate)
+{
+    public string Token { get; } = token;
+    public DateTimeOffset ExpireDate { get; } = expireDate;
+}
+
 public class OsuApi : IDisposable
 {
     // эээ)
@@ -20,7 +26,7 @@ public class OsuApi : IDisposable
     private readonly HttpClient _client;
 
     private string? _actualRefreshToken;
-    private string? _accessToken;
+    private AccessTokenData? _accessTokenData;
 
     public OsuApi(IOptions<OsuConfig> options, ILogger<OsuApi> logger)
     {
@@ -36,7 +42,7 @@ public class OsuApi : IDisposable
     /// <returns></returns>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Бывает...</exception>
-    private async Task<string> MakeTokenAsync()
+    private async Task<RefreshResponse> MakeTokenAsync()
     {
         if (_actualRefreshToken == null)
         {
@@ -77,7 +83,7 @@ public class OsuApi : IDisposable
 
         _logger.LogDebug("Обновили токен.");
 
-        return responseContent.AccessToken;
+        return responseContent;
     }
 
     /// <summary>
@@ -87,7 +93,13 @@ public class OsuApi : IDisposable
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task UpdateTokenAsync()
     {
-        _accessToken = await MakeTokenAsync();
+        if (_accessTokenData != null && DateTimeOffset.UtcNow < _accessTokenData.ExpireDate)
+            return;
+
+        RefreshResponse response = await MakeTokenAsync();
+
+        _accessTokenData = new AccessTokenData(response.AccessToken,
+            DateTimeOffset.UtcNow + TimeSpan.FromSeconds(response.ExpiresIn - 600));
     }
 
     /// <summary>
@@ -107,7 +119,7 @@ public class OsuApi : IDisposable
         using var requestMessage =
             new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/rooms?{queryParams.ToString()}");
 
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessTokenData.Token);
         requestMessage.Headers.Add("x-api-version", "20240923");
 
         HttpResponseMessage responseMessage =
@@ -140,7 +152,7 @@ public class OsuApi : IDisposable
         using var requestMessage =
             new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/beatmaps/{beatmapId}");
 
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessTokenData.Token);
         requestMessage.Headers.Add("x-api-version", "20240923");
 
         HttpResponseMessage responseMessage =
@@ -165,7 +177,7 @@ public class OsuApi : IDisposable
         using var requestMessage =
             new HttpRequestMessage(HttpMethod.Get, $"https://osu.ppy.sh/api/v2/beatmapsets/{beatmapSetId}");
 
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessTokenData.Token);
         requestMessage.Headers.Add("x-api-version", "20240923");
 
         HttpResponseMessage responseMessage =
