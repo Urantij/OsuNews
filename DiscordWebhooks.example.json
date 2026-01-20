@@ -1,0 +1,15 @@
+[
+  {
+    "Value": {
+      "Uri": "https://discord.com/api/webhooks/1414/8881",
+      "Note": "Discord server with a lot of good people",
+      "Language": "en",
+      "Daily": {
+        "Name": "New Daily Map!!!"
+      },
+      "Video": {
+        "Post": false
+      }
+    }
+  }
+]

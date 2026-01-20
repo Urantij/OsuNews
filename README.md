@@ -17,7 +17,7 @@ https://osu.ppy.sh/home/account/edit тут нужно создать своё o
 
 ## конфигурация
 
-Пример конфигурации находится в файле appsettings.example.json  
+Пример конфигурации находится в файле appsettings.example.json и DiscordWebhooks.example.json 
 
 Конфиги, которые нужно указать приложению. Например, через appsettings.json  
 Osu/OsuConfig.cs  

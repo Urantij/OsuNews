@@ -11,9 +11,9 @@ using OsuNews.Resources;
 
 namespace OsuNews.Newscasters.Discorb;
 
-public class DiscordStorage : MyStorage<DiscordHookConfig>
+public class DiscordStorage : MyBiggerStorage<DiscordHookConfig>
 {
-    public DiscordStorage(string path, ILoggerFactory loggerFactory) : base(path, loggerFactory)
+    public DiscordStorage(string path, ILogger<DiscordStorage> logger) : base(path, h => h.Uri, logger)
     {
     }
 }
@@ -307,18 +307,10 @@ public partial class Discorder : IHostedService, INewscaster
 
     private Task DeleteClientAsync(Hook hook, string reason)
     {
-        if (_discordStorage.IsLocal(hook.Config))
-        {
-            _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", hook.Config.Note ?? hook.Client.Id.ToString(),
-                reason);
-
-            return _discordStorage.RemoveAsync(hook.Config);
-        }
-
-        _logger.LogError("Вебхук {id} {reason}. Но он не локальный..", hook.Config.Note ?? hook.Client.Id.ToString(),
+        _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", hook.Config.Note ?? hook.Config.Uri.ToString(),
             reason);
 
-        return Task.CompletedTask;
+        return _discordStorage.DisableAsync(hook.Config.Uri, reason);
     }
 
     private WebhookMessageProperties CreateDefaultBuilder(params DiscordPostConfig?[] postConfigs)

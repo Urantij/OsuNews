@@ -22,7 +22,8 @@ public class Program
             if (builder.Configuration.GetSection(DiscorderConfig.Path).Exists())
             {
                 builder.Services.AddSingleton<DiscordStorage>(serviceProvider =>
-                    new DiscordStorage("./DiscordWebhooks.json", serviceProvider.GetRequiredService<ILoggerFactory>()));
+                    new DiscordStorage("./DiscordWebhooks.json",
+                        serviceProvider.GetRequiredService<ILogger<DiscordStorage>>()));
                 builder.Services.AddHostedService<DiscordStorage>(sp => sp.GetRequiredService<DiscordStorage>());
 
                 builder.Services.AddOptions<DiscorderConfig>()
@@ -79,22 +80,6 @@ public class Program
         builder.Services.AddHostedService<MainWorker>(sp => sp.GetRequiredService<MainWorker>());
 
         var host = builder.Build();
-
-        {
-            IOptions<DiscorderConfig>? options = host.Services.GetService<IOptions<DiscorderConfig>>();
-            if (options != null)
-            {
-                var storage = host.Services.GetRequiredService<DiscordStorage>();
-                storage.AddExternal(new DiscordHookConfig()
-                {
-                    Uri = options.Value.Hook,
-                    Video = options.Value.Video,
-                    Daily = options.Value.Daily,
-                    Language = "ru",
-                    Note = "Main"
-                });
-            }
-        }
 
         host.Run();
     }
