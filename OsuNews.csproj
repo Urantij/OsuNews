@@ -36,4 +36,9 @@
         <DependentUpon>Lines.ru.resx</DependentUpon>
       </Compile>
     </ItemGroup>
+
+    <ItemGroup>
+      <Content Remove="Newscasters\Discorb\embedexample.json" />
+      <None Include="Newscasters\Discorb\embedexample.json" />
+    </ItemGroup>
 </Project>
