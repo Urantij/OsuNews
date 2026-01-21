@@ -20,6 +20,8 @@ public class OsuApi : IDisposable
     // эээ)
     public const int TagCountsToCount = 5;
 
+    private const string AccessTokenDataFile = "AccessToken";
+
     private readonly ILogger<OsuApi> _logger;
     private readonly OsuConfig _config;
 
@@ -28,12 +30,16 @@ public class OsuApi : IDisposable
     private string? _actualRefreshToken;
     private AccessTokenData? _accessTokenData;
 
-    public OsuApi(IOptions<OsuConfig> options, ILogger<OsuApi> logger)
+    private readonly string _accessTokenDataFilePath;
+
+    public OsuApi(IOptions<AppConfig> appOptions, IOptions<OsuConfig> options, ILogger<OsuApi> logger)
     {
         _logger = logger;
         _config = options.Value;
 
         _client = new HttpClient();
+
+        _accessTokenDataFilePath = Path.Combine(appOptions.Value.DataPath, AccessTokenDataFile);
     }
 
     // TODO это должно быть не тут, но блин блять
@@ -140,6 +146,24 @@ public class OsuApi : IDisposable
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
     public async Task UpdateTokenAsync()
     {
+        if (_accessTokenData == null)
+        {
+            if (File.Exists(_accessTokenDataFilePath))
+            {
+                try
+                {
+                    string fileContent = await File.ReadAllTextAsync(_accessTokenDataFilePath);
+                    _accessTokenData = JsonSerializer.Deserialize<AccessTokenData>(fileContent);
+
+                    _logger.LogInformation("Прочитали асец токен с файла");
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Не удалось прочитац асец конфиг");
+                }
+            }
+        }
+
         if (_accessTokenData != null && DateTimeOffset.UtcNow < _accessTokenData.ExpireDate)
             return;
 
@@ -147,6 +171,9 @@ public class OsuApi : IDisposable
 
         _accessTokenData = new AccessTokenData(response.AccessToken,
             DateTimeOffset.UtcNow + TimeSpan.FromSeconds(response.ExpiresIn - 600));
+
+        string writeContent = JsonSerializer.Serialize(_accessTokenData);
+        await File.WriteAllTextAsync(_accessTokenDataFilePath, writeContent);
     }
 
     /// <summary>
