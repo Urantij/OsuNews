@@ -6,26 +6,33 @@ namespace OsuNews.VideoV;
 
 public class VideoViewer : BackgroundService
 {
+    private const string FileName = "LastVideoId";
+
     private readonly TubeApi _api;
     private readonly ILogger<VideoViewer> _logger;
     private readonly VideoViewerConfig _config;
+
+    private readonly string _cachePath;
 
     private string? _lastKnownVideoId;
 
     public event Action<string>? NewVideoUploaded;
 
-    public VideoViewer(TubeApi api, IOptions<VideoViewerConfig> options, ILogger<VideoViewer> logger)
+    public VideoViewer(TubeApi api, IOptions<AppConfig> appOptions, IOptions<VideoViewerConfig> options,
+        ILogger<VideoViewer> logger)
     {
         _api = api;
         _logger = logger;
         _config = options.Value;
+
+        _cachePath = Path.Combine(appOptions.Value.DataPath, FileName);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (File.Exists(_config.CachePath))
+        if (File.Exists(_cachePath))
         {
-            _lastKnownVideoId = await File.ReadAllTextAsync(_config.CachePath, stoppingToken);
+            _lastKnownVideoId = await File.ReadAllTextAsync(_cachePath, stoppingToken);
         }
 
         while (!stoppingToken.IsCancellationRequested)
@@ -67,7 +74,7 @@ public class VideoViewer : BackgroundService
             bool wasNull = _lastKnownVideoId == null;
 
             _lastKnownVideoId = latestVideoId;
-            await File.WriteAllTextAsync(_config.CachePath, latestVideoId, stoppingToken);
+            await File.WriteAllTextAsync(_cachePath, latestVideoId, stoppingToken);
 
             if (wasNull)
                 continue;
