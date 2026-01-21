@@ -21,6 +21,7 @@ public class OsuApi : IDisposable
     public const int TagCountsToCount = 5;
 
     private const string AccessTokenDataFile = "AccessToken";
+    private const string RefreshTokenDataFile = "RefreshToken";
 
     private readonly ILogger<OsuApi> _logger;
     private readonly OsuConfig _config;
@@ -31,6 +32,7 @@ public class OsuApi : IDisposable
     private AccessTokenData? _accessTokenData;
 
     private readonly string _accessTokenDataFilePath;
+    private readonly string _refreshTokenDataFilePath;
 
     public OsuApi(IOptions<AppConfig> appOptions, IOptions<OsuConfig> options, ILogger<OsuApi> logger)
     {
@@ -40,6 +42,7 @@ public class OsuApi : IDisposable
         _client = new HttpClient();
 
         _accessTokenDataFilePath = Path.Combine(appOptions.Value.DataPath, AccessTokenDataFile);
+        _refreshTokenDataFilePath = Path.Combine(appOptions.Value.DataPath, RefreshTokenDataFile);
     }
 
     // TODO это должно быть не тут, но блин блять
@@ -99,10 +102,10 @@ public class OsuApi : IDisposable
     {
         if (_actualRefreshToken == null)
         {
-            if (File.Exists(_config.RefreshTokenPath))
+            if (File.Exists(_refreshTokenDataFilePath))
             {
                 _logger.LogDebug("Читаем токен с файла");
-                _actualRefreshToken = await File.ReadAllTextAsync(_config.RefreshTokenPath);
+                _actualRefreshToken = await File.ReadAllTextAsync(_refreshTokenDataFilePath);
             }
             else
             {
@@ -132,7 +135,7 @@ public class OsuApi : IDisposable
 
         _logger.LogDebug("Пишем токен...");
         _actualRefreshToken = responseContent.RefreshToken;
-        await File.WriteAllTextAsync(_config.RefreshTokenPath, responseContent.RefreshToken);
+        await File.WriteAllTextAsync(_refreshTokenDataFilePath, responseContent.RefreshToken);
 
         _logger.LogDebug("Обновили токен.");
 
