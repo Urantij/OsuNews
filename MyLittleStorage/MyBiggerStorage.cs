@@ -75,7 +75,16 @@ public class MyBiggerStorage<T> : IHostedService
     private readonly ILogger _logger;
 
     private readonly FileSystemWatcher _watcher;
-    private CancellationTokenSource? _watcherProcessingCts;
+
+    /// <summary>
+    /// Текущий таск обработки изменений.
+    /// </summary>
+    private TaskCompletionSource? _watcherProcessingTsc = null;
+
+    /// <summary>
+    /// Ждёт ли кто то ещё, когда текущий процессинг пройдёт.
+    /// </summary>
+    private bool _watcherProcessingWaits = false;
 
     private readonly List<MyBiggerContainer<T>> _list = [];
 
@@ -181,39 +190,71 @@ public class MyBiggerStorage<T> : IHostedService
     {
         _logger.LogInformation("Файл изменился, обрабатываем.");
 
-        CancellationToken cancellationToken;
+        Task? waitTask = null;
+        TaskCompletionSource? enterTcs = null;
         lock (_watcher)
         {
-            if (_watcherProcessingCts != null)
-            {
-                _watcherProcessingCts.Cancel();
-                _watcherProcessingCts.Dispose();
-            }
+            if (_watcherProcessingWaits)
+                return;
 
-            _watcherProcessingCts = new CancellationTokenSource();
-            cancellationToken = _watcherProcessingCts.Token;
+            if (_watcherProcessingTsc != null)
+            {
+                _watcherProcessingWaits = true;
+                waitTask = _watcherProcessingTsc.Task;
+            }
+            else
+            {
+                _watcherProcessingTsc =
+                    enterTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
         }
 
         Task.Run(async () =>
         {
+            if (waitTask != null)
+            {
+                await waitTask;
+                lock (_watcher)
+                {
+                    _watcherProcessingWaits = false;
+                    _watcherProcessingTsc =
+                        enterTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
+
             try
             {
-                await ProcessFileChangesAsync(cancellationToken);
+                await ProcessFileChangesAsync(enterTcs);
             }
-            catch (OperationCanceledException)
+            catch (Exception e)
             {
-                return;
+                _logger.LogCritical(e, "Ошибка при обработке изменений файла.");
             }
         });
     }
 
-    private async Task ProcessFileChangesAsync(CancellationToken cancellationToken)
+    private async Task ProcessFileChangesAsync(TaskCompletionSource tcs)
     {
+        void CompleteTask()
+        {
+            lock (_watcher)
+            {
+                if (tcs != _watcherProcessingTsc)
+                {
+                    // этого по идее вообще не должно быть
+                    return;
+                }
+
+                _watcherProcessingTsc = null;
+                tcs.SetResult();
+            }
+        }
+
         int added = 0;
         int replaced = 0;
         int removed = 0;
 
-        string sourceText = await File.ReadAllTextAsync(_path, cancellationToken);
+        string sourceText = await File.ReadAllTextAsync(_path);
 
         MyBiggerContainer<T>[] data;
         try
@@ -223,11 +264,17 @@ public class MyBiggerStorage<T> : IHostedService
         catch (JsonException e)
         {
             _logger.LogWarning("Файл со сломанным жесоном {line}:{position}", e.LineNumber, e.BytePositionInLine);
+
+            // можно было бы так, но мне не хочется, там ошибки ловить, впадлу.
+            // tcs.SetException();
+            CompleteTask();
             return;
         }
         catch (Exception e)
         {
             _logger.LogWarning(e, "Не удалось прочитать файл.");
+
+            CompleteTask();
             return;
         }
 
@@ -255,9 +302,6 @@ public class MyBiggerStorage<T> : IHostedService
                     continue;
                 }
             }
-
-            if (cancellationToken.IsCancellationRequested)
-                throw new OperationCanceledException(cancellationToken);
         }
 
         lock (_list)
@@ -269,12 +313,11 @@ public class MyBiggerStorage<T> : IHostedService
 
                 _list.Remove(listContainer);
                 removed++;
-
-                if (cancellationToken.IsCancellationRequested)
-                    throw new OperationCanceledException(cancellationToken);
             }
         }
 
         _logger.LogInformation("Прочитали файл, +{added} -{removed} ~{replaced}", added, removed, replaced);
+
+        CompleteTask();
     }
 }
