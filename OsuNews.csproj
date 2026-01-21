@@ -45,8 +45,4 @@
         <Content Remove="DiscordWebhooks.example.json"/>
         <None Include="DiscordWebhooks.example.json"/>
     </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="Daily\TagsUpdater\"/>
-    </ItemGroup>
 </Project>

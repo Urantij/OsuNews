@@ -14,6 +14,11 @@ public class DailyConfig
     /// </summary>
     public TimeSpan ActiveCheck { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Как часто проверять новые теги на дейли карте
+    /// </summary>
+    public TimeSpan TagsRecheckTime { get; set; } = TimeSpan.FromMinutes(30);
+
     public TimeSpan FailureWaitTime { get; set; } = TimeSpan.FromSeconds(20);
 
     /// <summary>

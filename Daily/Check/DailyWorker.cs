@@ -19,6 +19,8 @@ public class DailyWorker : BackgroundService
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
 
+    public OsuFullDailyInfo? CurrentInfo { get; private set; }
+
     public event Action<OsuFullDailyInfo>? NewDaily;
 
     public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<DailyConfig> options, DailyCacheStore store,
@@ -175,7 +177,7 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            OsuTagData[]? tags = await LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
+            OsuTagData[]? tags = await _api.LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
 
             MapAnalyzeResult? analyzeResult = null;
             bool triedToAnalyze = false;
@@ -217,56 +219,13 @@ public class DailyWorker : BackgroundService
 
             OsuFullDailyInfo info = new(daily, beatmap, tags, analyzeResult, triedToAnalyze, previewContent,
                 triedToPreview);
-            DailyCacheInfo dailyCache = new DailyCacheInfo(daily.Id, daily.EndsAt.ToUniversalTime(), tags);
+            DailyCacheInfo dailyCache =
+                new DailyCacheInfo(daily.Id, beatmap.BeatmapsetId, beatmap.Id, daily.EndsAt.ToUniversalTime(), tags,
+                    DateTimeOffset.UtcNow);
             await _store.OverwriteCacheAsync(dailyCache);
 
+            CurrentInfo = info;
             NewDaily?.Invoke(info);
-        }
-    }
-
-    private async Task<OsuTagData[]?> LoadTagsAsync(ulong beatmapSetId, ulong beatmapId)
-    {
-        try
-        {
-            OsuBeatmapSet beatmapSet = await _api.GetBeatmapSetAsync(beatmapSetId);
-
-            OsuBeatmap? map = beatmapSet.Beatmaps.FirstOrDefault(b => b.Id == beatmapId);
-
-            if (map == null)
-            {
-                _logger.LogWarning("В сете не нашлось карты, лол");
-                return null;
-            }
-
-            return map.TagIds
-                .Select(tagId =>
-                    new
-                    {
-                        tagId,
-                        relatedTag = beatmapSet.RelatedTags.FirstOrDefault(related => related.Id == tagId.TagId)
-                    })
-                .Where(an =>
-                {
-                    if (an.relatedTag == null)
-                    {
-                        _logger.LogWarning("Не нашли рилейтед тег, ого {id}", an.tagId.TagId);
-                        return false;
-                    }
-
-                    return true;
-                })
-                .Select(an => new OsuTagData(an.tagId.TagId, an.relatedTag.Name, an.tagId.Count))
-                .ToArray();
-        }
-        catch (Exception e)
-        {
-            _logger.LogWarning(e, "Не удалось загрузить сет.");
-            if (e is not (HttpRequestException or TaskCanceledException))
-            {
-                _logger.LogWarning(e, "Специфичная ошибка");
-            }
-
-            return null;
         }
     }
 }

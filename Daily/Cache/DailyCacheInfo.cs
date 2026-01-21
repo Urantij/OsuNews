@@ -1,27 +1,40 @@
 using OsuNews.Osu;
 
-namespace OsuNews.Daily;
+namespace OsuNews.Daily.Cache;
 
 /// <summary>
 /// Хранит информацию о дейлике.
 /// </summary>
-/// <param name="id"></param>
-/// <param name="endDate"></param>
-/// <param name="tags"></param>
-public class DailyCacheInfo(ulong id, DateTime endDate, OsuTagData[]? tags)
+public class DailyCacheInfo
 {
     /// <summary>
     /// Айди дейлика в осу (плейлист, не мапа)
     /// </summary>
-    public ulong Id { get; set; } = id;
+    public ulong Id { get; set; }
+
+    public ulong BeatmapSetId { get; set; }
+    public ulong BeatmapId { get; set; }
 
     /// <summary>
     /// Когда плейлист дейлика закрывается
     /// </summary>
-    public DateTime EndDate { get; set; } = endDate;
+    public DateTime EndDate { get; set; }
 
     /// <summary>
     /// Юзер теги
     /// </summary>
-    public OsuTagData[]? Tags { get; set; } = tags;
+    public OsuTagData[]? Tags { get; set; }
+
+    public DateTimeOffset? LatestTagsUpdate { get; set; }
+
+    public DailyCacheInfo(ulong id, ulong beatmapSetId, ulong beatmapId, DateTime endDate, OsuTagData[]? tags,
+        DateTimeOffset? latestTagsUpdate)
+    {
+        Id = id;
+        BeatmapSetId = beatmapSetId;
+        BeatmapId = beatmapId;
+        EndDate = endDate;
+        Tags = tags;
+        LatestTagsUpdate = latestTagsUpdate;
+    }
 }

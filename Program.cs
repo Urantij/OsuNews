@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Options;
 using OsuNews.Daily;
 using OsuNews.Daily.Cache;
 using OsuNews.Daily.Check;
+using OsuNews.Daily.TagsUpdater;
 using OsuNews.Main;
 using OsuNews.Map;
 using OsuNews.MyTube;
@@ -78,6 +78,8 @@ public class Program
                 builder.Services.AddHostedService<DailyCacheStore>(sp => sp.GetRequiredService<DailyCacheStore>());
                 builder.Services.AddSingleton<DailyWorker>();
                 builder.Services.AddHostedService<DailyWorker>(sp => sp.GetRequiredService<DailyWorker>());
+                builder.Services.AddSingleton<DailyTagUpdater>();
+                builder.Services.AddHostedService<DailyTagUpdater>(sp => sp.GetRequiredService<DailyTagUpdater>());
             }
         }
 

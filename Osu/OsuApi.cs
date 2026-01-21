@@ -36,6 +36,53 @@ public class OsuApi : IDisposable
         _client = new HttpClient();
     }
 
+    // TODO это должно быть не тут, но блин блять
+    public async Task<OsuTagData[]?> LoadTagsAsync(ulong beatmapSetId, ulong beatmapId)
+    {
+        try
+        {
+            OsuBeatmapSet beatmapSet = await GetBeatmapSetAsync(beatmapSetId);
+
+            OsuBeatmap? map = beatmapSet.Beatmaps.FirstOrDefault(b => b.Id == beatmapId);
+
+            if (map == null)
+            {
+                _logger.LogWarning("В сете не нашлось карты, лол");
+                return null;
+            }
+
+            return map.TagIds
+                .Select(tagId =>
+                    new
+                    {
+                        tagId,
+                        relatedTag = beatmapSet.RelatedTags.FirstOrDefault(related => related.Id == tagId.TagId)
+                    })
+                .Where(an =>
+                {
+                    if (an.relatedTag == null)
+                    {
+                        _logger.LogWarning("Не нашли рилейтед тег, ого {id}", an.tagId.TagId);
+                        return false;
+                    }
+
+                    return true;
+                })
+                .Select(an => new OsuTagData(an.tagId.TagId, an.relatedTag.Name, an.tagId.Count))
+                .ToArray();
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Не удалось загрузить сет.");
+            if (e is not (HttpRequestException or TaskCanceledException))
+            {
+                _logger.LogWarning(e, "Специфичная ошибка");
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>
     /// 
     /// </summary>

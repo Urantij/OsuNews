@@ -30,6 +30,9 @@ public partial class Discorder : IHostedService, INewscaster
     // https://discord.com/api/webhooks/1234356456/a-asd132_4sdf3-asd3234
     private static readonly Regex WebhookUriRegex = MyWebHookRegex();
 
+    private const string CacheDirName = "DiscordTagsHome.json";
+    private readonly MyManySmallStorage<DiscordHookCache> _manySmall;
+
     private readonly DiscordStorage _discordStorage;
     private readonly ILogger<Discorder> _logger;
     private readonly DiscorderConfig _config;
@@ -42,11 +45,14 @@ public partial class Discorder : IHostedService, INewscaster
 
     private readonly DiscordPostConfig _defaultPostConfig = DiscordPostConfig.CreateDefault();
 
-    public Discorder(DiscordStorage discordStorage, IOptions<DiscorderConfig> options, ILoggerFactory loggerFactory)
+    public Discorder(DiscordStorage discordStorage, IOptions<AppConfig> appOptions, IOptions<DiscorderConfig> options,
+        ILoggerFactory loggerFactory)
     {
         _discordStorage = discordStorage;
         _logger = loggerFactory.CreateLogger<Discorder>();
         _config = options.Value;
+
+        _manySmall = new MyManySmallStorage<DiscordHookCache>(Path.Combine(appOptions.Value.DataPath, CacheDirName));
 
         // Я крайне удивлён.
         // Я юзал Discord.Net для вебхук клиента
@@ -122,6 +128,7 @@ public partial class Discorder : IHostedService, INewscaster
 
         _logger.LogInformation("Добавлено {count} хуков.", count);
 
+        _manySmall.Start(cancellationToken);
 
         return Task.CompletedTask;
     }
@@ -129,6 +136,41 @@ public partial class Discorder : IHostedService, INewscaster
     public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
+    }
+
+    public async Task TellThemAboutUpdatedDailyAsync(OsuFullDailyInfo info)
+    {
+        Hook[] hooks;
+        lock (_hooks)
+            hooks = _hooks.ToArray();
+
+        foreach (Hook hook in hooks)
+        {
+            bool post = GetFirstDaily(hook, config => config.Post);
+
+            if (!post)
+                continue;
+
+            string cacheFileName = CreateCacheFileName(hook.Client.Id, info.Game.Id);
+
+            DiscordHookCache? cache = await _manySmall.ReadAsync(cacheFileName);
+
+            if (cache == null)
+                continue;
+
+            string? tagsLine = CreateTagsLine(info, hook);
+
+            if (tagsLine == null || cache.Tags == tagsLine)
+                continue;
+
+            WebhookMessageProperties b = FormDailyMessage(info, hook, tagsLine);
+
+            RestMessage? message = await UpdateAsync(cache.MessageId, hook, b);
+            if (message == null)
+                continue;
+
+            await _manySmall.WriteAsync(cacheFileName, new DiscordHookCache(tagsLine, message.Id));
+        }
     }
 
     public async Task TellThemAboutVideoAsync(string videoId)
@@ -165,13 +207,22 @@ public partial class Discorder : IHostedService, INewscaster
             if (!post)
                 continue;
 
-            WebhookMessageProperties b = FormDailyMessage(info, hook);
+            string? tagsLine = CreateTagsLine(info, hook);
 
-            await SendAsync(hook, b);
+            WebhookMessageProperties b = FormDailyMessage(info, hook, tagsLine);
+
+            RestMessage? message = await SendAsync(hook, b);
+            if (message == null)
+                continue;
+
+            string cacheFileName = CreateCacheFileName(hook.Client.Id, info.Game.Id);
+
+            await _manySmall.WriteAsync(cacheFileName,
+                new DiscordHookCache(tagsLine, message.Id));
         }
     }
 
-    private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, Hook hook)
+    private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, Hook hook, string? tagsLine)
     {
         WebhookMessageProperties b = CreateDefaultBuilder(GetDailyConfigs(hook));
 
@@ -197,14 +248,10 @@ public partial class Discorder : IHostedService, INewscaster
             StringBuilder sb = new();
 
             // у меня была мысль, что разные челы могут хотеть разный трешхолд, но мне стало впадлу и в целом похуй
-            if (info.Tags?.Length > 0)
+            if (tagsLine != null)
             {
-                OsuTagData[] realTags = info.Tags.Where(tag => tag.Count >= OsuApi.TagCountsToCount).ToArray();
-                if (realTags.Length > 0)
-                {
-                    sb.AppendJoin(' ', realTags.Select(t => t.Name));
-                    sb.AppendLine();
-                }
+                sb.AppendLine(tagsLine);
+                sb.AppendLine();
             }
 
             TimeSpan length = TimeSpan.FromSeconds(info.Map.TotalLength);
@@ -285,11 +332,11 @@ public partial class Discorder : IHostedService, INewscaster
         return b;
     }
 
-    private async Task SendAsync(Hook hook, WebhookMessageProperties b)
+    private async Task<RestMessage?> SendAsync(Hook hook, WebhookMessageProperties b)
     {
         try
         {
-            await hook.Client.ExecuteAsync(b);
+            return await hook.Client.ExecuteAsync(b);
         }
         catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
         {
@@ -303,6 +350,35 @@ public partial class Discorder : IHostedService, INewscaster
         {
             _logger.LogError(e, "Не удалось отправить из-за непонятной ошибки");
         }
+
+        return null;
+    }
+
+    private async Task<RestMessage?> UpdateAsync(ulong messageId, Hook hook, WebhookMessageProperties b)
+    {
+        try
+        {
+            return await hook.Client.ModifyMessageAsync(messageId, options =>
+            {
+                options.WithAttachments(b.Attachments);
+                options.WithContent(b.Content);
+                options.WithEmbeds(b.Embeds);
+            });
+        }
+        catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await DeleteClientAsync(hook, "имеет плохой токен");
+        }
+        catch (RestException re) when (re.StatusCode == HttpStatusCode.NotFound)
+        {
+            await DeleteClientAsync(hook, "не существует");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Не удалось отправить из-за непонятной ошибки");
+        }
+
+        return null;
     }
 
     private Task DeleteClientAsync(Hook hook, string reason)
@@ -311,6 +387,21 @@ public partial class Discorder : IHostedService, INewscaster
             reason);
 
         return _discordStorage.DisableAsync(hook.Config.Uri, reason);
+    }
+
+    private string? CreateTagsLine(OsuFullDailyInfo info, Hook hook)
+    {
+        // у меня была мысль, что разные челы могут хотеть разный трешхолд, но мне стало впадлу и в целом похуй
+        if (info.Tags?.Length > 0)
+        {
+            OsuTagData[] realTags = info.Tags.Where(tag => tag.Count >= OsuApi.TagCountsToCount).ToArray();
+            if (realTags.Length > 0)
+            {
+                return string.Join(' ', realTags.Select(t => t.Name));
+            }
+        }
+
+        return null;
     }
 
     private WebhookMessageProperties CreateDefaultBuilder(params DiscordPostConfig?[] postConfigs)
@@ -365,6 +456,11 @@ public partial class Discorder : IHostedService, INewscaster
         }
 
         return default;
+    }
+
+    private static string CreateCacheFileName(ulong webhookId, ulong dailyId)
+    {
+        return $"{webhookId}.{dailyId}.json";
     }
 
     [GeneratedRegex(@"https://discord.com/api/webhooks/(?<id>\d+)/(?<token>.+)$", RegexOptions.Compiled)]

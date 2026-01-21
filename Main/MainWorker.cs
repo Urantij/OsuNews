@@ -1,4 +1,6 @@
+using OsuNews.Daily.Cache;
 using OsuNews.Daily.Check;
+using OsuNews.Daily.TagsUpdater;
 using OsuNews.Newscasters;
 using OsuNews.Osu;
 using OsuNews.VideoV;
@@ -8,14 +10,17 @@ namespace OsuNews.Main;
 public class MainWorker : IHostedService
 {
     private readonly DailyWorker? _dailyWorker;
+    private readonly DailyTagUpdater? _dailyTagUpdater;
     private readonly VideoViewer? _videoViewer;
     private readonly ILogger<MainWorker> _logger;
     private readonly List<INewscaster> _newscasters;
 
-    public MainWorker(IEnumerable<INewscaster> newscasters, ILogger<MainWorker> logger, DailyWorker? dailyWorker = null,
+    public MainWorker(IEnumerable<INewscaster> newscasters, ILogger<MainWorker> logger,
+        DailyWorker? dailyWorker = null, DailyTagUpdater? dailyTagUpdater = null,
         VideoViewer? videoViewer = null)
     {
         _dailyWorker = dailyWorker;
+        _dailyTagUpdater = dailyTagUpdater;
         _videoViewer = videoViewer;
         _logger = logger;
         _newscasters = newscasters.ToList();
@@ -25,6 +30,9 @@ public class MainWorker : IHostedService
     {
         if (_dailyWorker != null)
             _dailyWorker.NewDaily += DailyWorkerOnNewDaily;
+
+        if (_dailyTagUpdater != null)
+            _dailyTagUpdater.TagsUpdated += DailyTagUpdaterOnTagsUpdated;
 
         if (_videoViewer != null)
             _videoViewer.NewVideoUploaded += VideoViewerOnNewVideoUploaded;
@@ -37,6 +45,9 @@ public class MainWorker : IHostedService
         if (_dailyWorker != null)
             _dailyWorker.NewDaily -= DailyWorkerOnNewDaily;
 
+        if (_dailyTagUpdater != null)
+            _dailyTagUpdater.TagsUpdated -= DailyTagUpdaterOnTagsUpdated;
+
         if (_videoViewer != null)
             _videoViewer.NewVideoUploaded -= VideoViewerOnNewVideoUploaded;
 
@@ -48,6 +59,19 @@ public class MainWorker : IHostedService
         _logger.LogInformation("Сообщаем о новом дейлике...");
         CastNewsAsync(newscaster => newscaster.TellThemAboutDailyAsync(info))
             .ContinueWith((_) => { _logger.LogInformation("Сообщили о новом дейлике."); });
+    }
+
+    private void DailyTagUpdaterOnTagsUpdated(DailyCacheInfo cache, OsuTagData[] tags)
+    {
+        _logger.LogInformation("Сообщаем о новых тегах...");
+
+        OsuFullDailyInfo? info = _dailyWorker?.CurrentInfo;
+
+        if (info?.Map.Id != cache.Id)
+            return;
+
+        CastNewsAsync(newscaster => newscaster.TellThemAboutUpdatedDailyAsync(info))
+            .ContinueWith((_) => { _logger.LogInformation("Сообщили о новых тегах."); });
     }
 
     private void VideoViewerOnNewVideoUploaded(string videoId)
