@@ -90,6 +90,10 @@ public class MyBiggerStorage<T> : IHostedService
 
     private readonly JsonSerializerOptions _jsonSerializerOptions;
 
+    public event Action<T>? DataAdded;
+    public event Action<T>? DataRemoved;
+    public event Action<T, T>? DataReplaced;
+
     public MyBiggerStorage(string path, Func<T, object> keyFunc, ILogger logger)
     {
         _path = path;
@@ -224,35 +228,26 @@ public class MyBiggerStorage<T> : IHostedService
 
             try
             {
-                await ProcessFileChangesAsync(enterTcs);
+                await ProcessFileChangesAsync();
             }
             catch (Exception e)
             {
                 _logger.LogCritical(e, "Ошибка при обработке изменений файла.");
             }
+
+            lock (_watcher)
+            {
+                _watcherProcessingTsc = null;
+                enterTcs.SetResult();
+            }
         });
     }
 
-    private async Task ProcessFileChangesAsync(TaskCompletionSource tcs)
+    private async Task ProcessFileChangesAsync()
     {
-        void CompleteTask()
-        {
-            lock (_watcher)
-            {
-                if (tcs != _watcherProcessingTsc)
-                {
-                    // этого по идее вообще не должно быть
-                    return;
-                }
-
-                _watcherProcessingTsc = null;
-                tcs.SetResult();
-            }
-        }
-
-        int added = 0;
-        int replaced = 0;
-        int removed = 0;
+        List<T> added = [];
+        List<T> removed = [];
+        List<(T older, T newer)> replaced = [];
 
         string sourceText = await File.ReadAllTextAsync(_path);
 
@@ -264,17 +259,11 @@ public class MyBiggerStorage<T> : IHostedService
         catch (JsonException e)
         {
             _logger.LogWarning("Файл со сломанным жесоном {line}:{position}", e.LineNumber, e.BytePositionInLine);
-
-            // можно было бы так, но мне не хочется, там ошибки ловить, впадлу.
-            // tcs.SetException();
-            CompleteTask();
             return;
         }
         catch (Exception e)
         {
             _logger.LogWarning(e, "Не удалось прочитать файл.");
-
-            CompleteTask();
             return;
         }
 
@@ -286,8 +275,9 @@ public class MyBiggerStorage<T> : IHostedService
 
                 if (listContainerIndex == -1)
                 {
+                    added.Add(diskContainer.Value);
+
                     _list.Add(diskContainer);
-                    added++;
                     continue;
                 }
 
@@ -295,10 +285,11 @@ public class MyBiggerStorage<T> : IHostedService
 
                 if (listContainer.Hash != diskContainer.Hash || listContainer.Disabled() != diskContainer.Disabled())
                 {
+                    replaced.Add((listContainer.Value, diskContainer.Value));
+
                     listContainer.Value = diskContainer.Value;
                     listContainer.Hash = diskContainer.Hash;
                     listContainer.Disability = diskContainer.Disability;
-                    replaced++;
                     continue;
                 }
             }
@@ -311,13 +302,35 @@ public class MyBiggerStorage<T> : IHostedService
                 if (data.Any(d => d.Value == listContainer.Value))
                     continue;
 
+                removed.Add(listContainer.Value);
+
                 _list.Remove(listContainer);
-                removed++;
             }
         }
 
-        _logger.LogInformation("Прочитали файл, +{added} -{removed} ~{replaced}", added, removed, replaced);
+        _logger.LogInformation("Прочитали файл, +{added} -{removed} ~{replaced}", added.Count, removed.Count,
+            replaced.Count);
 
-        CompleteTask();
+        try
+        {
+            foreach (T d in added)
+            {
+                DataAdded?.Invoke(d);
+            }
+
+            foreach (T d in removed)
+            {
+                DataRemoved?.Invoke(d);
+            }
+
+            foreach ((T older, T newer) pair in replaced)
+            {
+                DataReplaced?.Invoke(pair.older, pair.newer);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Обработка изменений упала");
+        }
     }
 }
