@@ -61,14 +61,9 @@ public class MainWorker : IHostedService
             .ContinueWith((_) => { _logger.LogInformation("Сообщили о новом дейлике."); });
     }
 
-    private void DailyTagUpdaterOnTagsUpdated(DailyCacheInfo cache, OsuTagData[] tags)
+    private void DailyTagUpdaterOnTagsUpdated(OsuFullDailyInfo info)
     {
         _logger.LogInformation("Сообщаем о новых тегах...");
-
-        OsuFullDailyInfo? info = _dailyWorker?.CurrentInfo;
-
-        if (info?.Map.Id != cache.Id)
-            return;
 
         CastNewsAsync(newscaster => newscaster.TellThemAboutUpdatedDailyAsync(info))
             .ContinueWith((_) => { _logger.LogInformation("Сообщили о новых тегах."); });

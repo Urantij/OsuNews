@@ -7,7 +7,6 @@ using OsuNews.Map.Models;
 using OsuNews.Map.Parse;
 using OsuNews.Osu;
 using OsuNews.Osu.Models;
-using OsuNews.Osu.Models.Set;
 
 namespace OsuNews.Daily.Check;
 
@@ -18,8 +17,6 @@ public class DailyWorker : BackgroundService
     private readonly DailyCacheStore _store;
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
-
-    public OsuFullDailyInfo? CurrentInfo { get; private set; }
 
     public event Action<OsuFullDailyInfo>? NewDaily;
 
@@ -112,11 +109,11 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            if (_store.LastDailyCache?.Id == daily.Id)
+            if (_store.LastDailyCache?.Game.Id == daily.Id)
             {
                 TimeSpan wait;
 
-                if (DateTime.UtcNow > _store.LastDailyCache.EndDate)
+                if (DateTime.UtcNow > _store.LastDailyCache.Game.EndsAt)
                 {
                     wait = _config.ActiveCheck;
                 }
@@ -127,9 +124,9 @@ public class DailyWorker : BackgroundService
                     // Если активное время наступает раньше конца пассивной проверки
                     // Проверим при наступлении активного времени + ожидание чека
 
-                    if (DateTime.UtcNow + wait >= _store.LastDailyCache.EndDate)
+                    if (DateTime.UtcNow + wait >= _store.LastDailyCache.Game.EndsAt)
                     {
-                        wait = (_store.LastDailyCache.EndDate - DateTime.UtcNow) + _config.ActiveCheck;
+                        wait = (_store.LastDailyCache.Game.EndsAt - DateTime.UtcNow) + _config.ActiveCheck;
                     }
                 }
 
@@ -152,12 +149,10 @@ public class DailyWorker : BackgroundService
 
             _logger.LogInformation("Новый дейлик {id}", daily.Id);
 
-            // В теории, не нужно делать все запросы заново, если провалился один.
-            // Но писать лупы мне впадлу, это выглядит сильно хуже.
-            OsuBeatmapExtended beatmap;
+            OsuFullDailyInfo info;
             try
             {
-                beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
+                info = await CreateFullInfoAsync(daily, stoppingToken);
             }
             catch (Exception e)
             {
@@ -177,55 +172,68 @@ public class DailyWorker : BackgroundService
                 continue;
             }
 
-            OsuTagData[]? tags = await _api.LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
+            await _store.OverwriteCacheAsync(info);
 
-            MapAnalyzeResult? analyzeResult = null;
-            bool triedToAnalyze = false;
-            if (_config.DoAnalyze)
-            {
-                triedToAnalyze = true;
-
-                try
-                {
-                    MapData mapData = await _mapDownloader.DownloadAsync(beatmap.Id, cancellationToken: stoppingToken);
-
-                    analyzeResult = MapAnalyzer.Analyze(mapData);
-                }
-                catch (BadMapException badMapException)
-                {
-                    _logger.LogWarning(badMapException.InnerException, "Не удалось проанализировать карту.");
-                }
-                catch (Exception e)
-                {
-                    _logger.LogWarning(e, "Не удалось загрузить карту.");
-                }
-            }
-
-            byte[]? previewContent = null;
-            bool triedToPreview = false;
-            if (_config.AttachPreview)
-            {
-                triedToPreview = true;
-
-                try
-                {
-                    previewContent = await _api.DownloadPreviewAsync(beatmap.Beatmapset.PreviewUrl, stoppingToken);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogWarning(e, "Не удалось скачать превью.");
-                }
-            }
-
-            OsuFullDailyInfo info = new(daily, beatmap, tags, analyzeResult, triedToAnalyze, previewContent,
-                triedToPreview);
-            DailyCacheInfo dailyCache =
-                new DailyCacheInfo(daily.Id, beatmap.BeatmapsetId, beatmap.Id, daily.EndsAt.ToUniversalTime(), tags,
-                    DateTimeOffset.UtcNow);
-            await _store.OverwriteCacheAsync(dailyCache);
-
-            CurrentInfo = info;
             NewDaily?.Invoke(info);
         }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="daily"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
+    /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    private async Task<OsuFullDailyInfo> CreateFullInfoAsync(OsuGame daily, CancellationToken cancellationToken)
+    {
+        // В теории, не нужно делать все запросы заново, если провалился один.
+        // Но писать лупы мне впадлу, это выглядит сильно хуже.
+        OsuBeatmapExtended beatmap = await _api.GetBeatmapAsync(daily.CurrentPlaylistItem.BeatmapId);
+
+        OsuTagData[]? tags = await _api.LoadTagsAsync(beatmap.BeatmapsetId, beatmap.Id);
+
+        MapAnalyzeResult? analyzeResult = null;
+        bool triedToAnalyze = false;
+        if (_config.DoAnalyze)
+        {
+            triedToAnalyze = true;
+
+            try
+            {
+                MapData mapData = await _mapDownloader.DownloadAsync(beatmap.Id, cancellationToken: cancellationToken);
+
+                analyzeResult = MapAnalyzer.Analyze(mapData);
+            }
+            catch (BadMapException badMapException)
+            {
+                _logger.LogWarning(badMapException.InnerException, "Не удалось проанализировать карту.");
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Не удалось загрузить карту.");
+            }
+        }
+
+        byte[]? previewContent = null;
+        bool triedToPreview = false;
+        if (_config.AttachPreview)
+        {
+            triedToPreview = true;
+
+            try
+            {
+                previewContent = await _api.DownloadPreviewAsync(beatmap.Beatmapset.PreviewUrl, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Не удалось скачать превью.");
+            }
+        }
+
+        return new OsuFullDailyInfo(daily, beatmap, tags, DateTimeOffset.UtcNow, analyzeResult, triedToAnalyze,
+            previewContent,
+            triedToPreview);
     }
 }

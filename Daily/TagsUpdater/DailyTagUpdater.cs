@@ -11,7 +11,7 @@ public class DailyTagUpdater : BackgroundService
     private readonly ILogger<DailyTagUpdater> _logger;
     private readonly DailyConfig _config;
 
-    public event Action<DailyCacheInfo, OsuTagData[]>? TagsUpdated;
+    public event Action<OsuFullDailyInfo>? TagsUpdated;
 
     public DailyTagUpdater(OsuApi api, IOptions<DailyConfig> options, DailyCacheStore store,
         ILogger<DailyTagUpdater> logger)
@@ -26,7 +26,7 @@ public class DailyTagUpdater : BackgroundService
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
         }
         catch
         {
@@ -56,9 +56,8 @@ public class DailyTagUpdater : BackgroundService
                 }
             }
 
-            DailyCacheInfo? cache = _store.LastDailyCache;
-            // такова не бывает если кеш не старый. если старый, то всё равно
-            if (cache == null || cache.LatestTagsUpdate == null)
+            OsuFullDailyInfo? cache = _store.LastDailyCache;
+            if (cache == null)
             {
                 try
                 {
@@ -71,9 +70,9 @@ public class DailyTagUpdater : BackgroundService
                 }
             }
 
-            TimeSpan passed = DateTimeOffset.UtcNow - cache.LatestTagsUpdate.Value;
+            TimeSpan passed = DateTimeOffset.UtcNow - cache.LatestTagsUpdate;
 
-            if (cache.Tags == null || passed < _config.TagsRecheckTime)
+            if (passed < _config.TagsRecheckTime)
             {
                 try
                 {
@@ -86,7 +85,7 @@ public class DailyTagUpdater : BackgroundService
                 }
             }
 
-            OsuTagData[]? tags = await _api.LoadTagsAsync(cache.BeatmapSetId, cache.BeatmapId);
+            OsuTagData[]? tags = await _api.LoadTagsAsync(cache.Map.BeatmapsetId, cache.Map.Id);
 
             if (tags == null)
             {
@@ -106,12 +105,12 @@ public class DailyTagUpdater : BackgroundService
             string[] now = tags.Where(t => t.Count > OsuApi.TagCountsToCount).Select(t => t.Name).ToArray();
 
             if (now.Length == were.Length && now.Intersect(were).Count() == now.Length) continue;
-            if (_store.LastDailyCache != cache) continue;
 
             cache.Tags = tags;
-            await _store.OverwriteCacheAsync(cache);
+            cache.LatestTagsUpdate = DateTimeOffset.UtcNow;
+            await _store.UpdateCacheAsync(cache);
 
-            TagsUpdated?.Invoke(cache, tags);
+            TagsUpdated?.Invoke(cache);
         }
     }
 }

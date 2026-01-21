@@ -13,7 +13,8 @@ namespace OsuNews.Newscasters.Discorb;
 
 public class DiscordStorage : MyBiggerStorage<DiscordHookConfig>
 {
-    public DiscordStorage(string path, ILogger<DiscordStorage> logger) : base(path, h => h.Uri, logger)
+    public DiscordStorage(string relativePath, IOptions<AppConfig> appOptions, ILogger<DiscordStorage> logger) : base(
+        Path.Combine(appOptions.Value.DataPath, relativePath), h => h.Uri, logger)
     {
     }
 }

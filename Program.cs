@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using OsuNews.Daily;
 using OsuNews.Daily.Cache;
 using OsuNews.Daily.Check;
@@ -28,7 +29,8 @@ public class Program
             if (builder.Configuration.GetSection(DiscorderConfig.Path).Exists())
             {
                 builder.Services.AddSingleton<DiscordStorage>(serviceProvider =>
-                    new DiscordStorage("./DiscordWebhooks.json",
+                    new DiscordStorage("DiscordWebhooks.json",
+                        serviceProvider.GetRequiredService<IOptions<AppConfig>>(),
                         serviceProvider.GetRequiredService<ILogger<DiscordStorage>>()));
                 builder.Services.AddHostedService<DiscordStorage>(sp => sp.GetRequiredService<DiscordStorage>());
 
