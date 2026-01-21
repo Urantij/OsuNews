@@ -21,6 +21,11 @@ public class MyManySmallStorage<T>
 
     public void Start(CancellationToken cancellationToken)
     {
+        if (!Directory.Exists(_dirPath))
+        {
+            Directory.CreateDirectory(_dirPath);
+        }
+
         Task.Run(async () => { await CleaningDuty(cancellationToken); }, cancellationToken);
     }
 

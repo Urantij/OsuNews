@@ -93,6 +93,14 @@ public class Program
 
         var host = builder.Build();
 
+        {
+            var options = host.Services.GetRequiredService<IOptions<AppConfig>>();
+            if (!Directory.Exists(options.Value.DataPath))
+            {
+                Directory.CreateDirectory(options.Value.DataPath);
+            }
+        }
+
         host.Run();
     }
 }
