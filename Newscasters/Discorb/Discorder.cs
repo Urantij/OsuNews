@@ -23,8 +23,13 @@ public partial class Discorder : IHostedService, INewscaster
     class Hook(WebhookClient client, DiscordHookConfig config, CultureInfo cultureInfo)
     {
         public WebhookClient Client { get; } = client;
-        public DiscordHookConfig Config { get; } = config;
+        public DiscordHookConfig Config { get; private set; } = config;
         public CultureInfo CultureInfo { get; } = cultureInfo;
+
+        public void ReplaceConfig(DiscordHookConfig config)
+        {
+            Config = config;
+        }
     }
 
     // https://discord.com/api/webhooks/1234356456/a-asd132_4sdf3-asd3234
@@ -64,61 +69,21 @@ public partial class Discorder : IHostedService, INewscaster
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        WebProxy? proxy = null;
         if (_config.Proxy != null)
         {
             _logger.LogInformation("Используем прокси.");
-            proxy = new WebProxy(_config.Proxy);
-        }
-
-        WebhookClientConfiguration? webhookClientConfiguration = null;
-        if (proxy != null)
-        {
-            webhookClientConfiguration = new WebhookClientConfiguration()
-            {
-                Client = new RestClient(new RestClientConfiguration()
-                {
-                    RequestHandler = new RestRequestHandler(new HttpClientHandler()
-                    {
-                        Proxy = proxy
-                    })
-                })
-            };
         }
 
         DiscordHookConfig[] targets = _discordStorage.GetAll();
         foreach (DiscordHookConfig target in targets)
         {
-            // Странно, что у них нет хелпера под это. А если и есть, то найти его я не смог. Документации нет.
-            Match match = WebhookUriRegex.Match(target.Uri.ToString());
-            if (!match.Success)
-            {
-                _logger.LogWarning("Не удалось пропарсить хук юрл. {Note}", target.Note ?? target.Uri.ToString());
+            Hook? hook = CreateHook(target);
+            if (hook == null)
                 continue;
-            }
 
-            ulong hookId = ulong.Parse(match.Groups["id"].Value);
-            string hookToken = match.Groups["token"].Value;
-
-            CultureInfo? cultureInfo = null;
-            if (target.Language != null)
-            {
-                try
-                {
-                    cultureInfo = CultureInfo.GetCultureInfo(target.Language);
-                }
-                catch (Exception)
-                {
-                    _logger.LogWarning("Не удалось пропарсить язык. {Note}", target.Note ?? hookId.ToString());
-                }
-            }
-
-            cultureInfo ??= _defaultCultureInfo;
-
-            WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
             lock (_hooks)
             {
-                _hooks.Add(new Hook(client, target, cultureInfo));
+                _hooks.Add(hook);
             }
         }
 
@@ -130,11 +95,19 @@ public partial class Discorder : IHostedService, INewscaster
 
         _manySmall.Start(cancellationToken);
 
+        _discordStorage.DataAdded += DiscordStorageOnDataAdded;
+        _discordStorage.DataRemoved += DiscordStorageOnDataRemoved;
+        _discordStorage.DataReplaced += DiscordStorageOnDataReplaced;
+
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        _discordStorage.DataAdded -= DiscordStorageOnDataAdded;
+        _discordStorage.DataRemoved -= DiscordStorageOnDataRemoved;
+        _discordStorage.DataReplaced -= DiscordStorageOnDataReplaced;
+
         return Task.CompletedTask;
     }
 
@@ -220,6 +193,106 @@ public partial class Discorder : IHostedService, INewscaster
             await _manySmall.WriteAsync(cacheFileName,
                 new DiscordHookCache(tagsLine, message.Id));
         }
+    }
+
+    private void DiscordStorageOnDataAdded(DiscordHookConfig obj)
+    {
+        Hook? hook = CreateHook(obj);
+        if (hook == null)
+            return;
+
+        lock (_hooks)
+        {
+            _hooks.Add(hook);
+        }
+    }
+
+    private void DiscordStorageOnDataRemoved(DiscordHookConfig obj)
+    {
+        Hook? hook;
+
+        lock (_hooks)
+        {
+            hook = _hooks.Find(h => h.Config.Uri == obj.Uri);
+
+            if (hook == null)
+            {
+                _logger.LogWarning("Не удалось убрать хук {id}", obj.Note ?? obj.Uri.ToString());
+                return;
+            }
+
+            _hooks.Remove(hook);
+        }
+
+        hook.Client.Dispose();
+    }
+
+    private void DiscordStorageOnDataReplaced(DiscordHookConfig arg1, DiscordHookConfig arg2)
+    {
+        lock (_hooks)
+        {
+            Hook? hook = _hooks.Find(h => h.Config.Uri == arg1.Uri);
+
+            if (hook == null)
+            {
+                _logger.LogWarning("Не удалось заменить хук {id}", arg1.Note ?? arg1.Uri.ToString());
+                return;
+            }
+
+            hook.ReplaceConfig(arg2);
+        }
+    }
+
+    private Hook? CreateHook(DiscordHookConfig target)
+    {
+        // Странно, что у них нет хелпера под это. А если и есть, то найти его я не смог. Документации нет.
+        Match match = WebhookUriRegex.Match(target.Uri.ToString());
+        if (!match.Success)
+        {
+            _logger.LogWarning("Не удалось пропарсить хук юрл. {Note}", target.Note ?? target.Uri.ToString());
+            return null;
+        }
+
+        ulong hookId = ulong.Parse(match.Groups["id"].Value);
+        string hookToken = match.Groups["token"].Value;
+
+        CultureInfo? cultureInfo = null;
+        if (target.Language != null)
+        {
+            try
+            {
+                cultureInfo = CultureInfo.GetCultureInfo(target.Language);
+            }
+            catch (Exception)
+            {
+                _logger.LogWarning("Не удалось пропарсить язык. {Note}", target.Note ?? hookId.ToString());
+            }
+        }
+
+        cultureInfo ??= _defaultCultureInfo;
+
+        // раньше делал один на всех, но при дисоузе клиента он хендлер диспоузит всегда тоже, уви.
+        // а вот хттп клиент умеет не диспуозить реквестер если надо
+        WebhookClientConfiguration? webhookClientConfiguration = null;
+        if (_config.Proxy != null)
+        {
+            WebProxy proxy = new(_config.Proxy);
+
+            webhookClientConfiguration = new WebhookClientConfiguration()
+            {
+                Client = new RestClient(new RestClientConfiguration()
+                {
+                    RequestHandler = new RestRequestHandler(new HttpClientHandler()
+                    {
+                        Proxy = proxy,
+                    })
+                })
+            };
+        }
+
+        WebhookClient client = new(hookId, hookToken, webhookClientConfiguration);
+
+        return new Hook(client, target, cultureInfo);
     }
 
     private WebhookMessageProperties FormDailyMessage(OsuFullDailyInfo info, Hook hook, string? tagsLine)
@@ -385,6 +458,13 @@ public partial class Discorder : IHostedService, INewscaster
     {
         _logger.LogWarning("Вебхук {id} {reason}. Ликвидирован.", hook.Config.Note ?? hook.Config.Uri.ToString(),
             reason);
+
+        lock (_hooks)
+        {
+            _hooks.Remove(hook);
+        }
+
+        hook.Client.Dispose();
 
         return _discordStorage.DisableAsync(hook.Config.Uri, reason);
     }
