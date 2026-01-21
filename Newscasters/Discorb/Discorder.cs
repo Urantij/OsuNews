@@ -35,7 +35,7 @@ public partial class Discorder : IHostedService, INewscaster
     // https://discord.com/api/webhooks/1234356456/a-asd132_4sdf3-asd3234
     private static readonly Regex WebhookUriRegex = MyWebHookRegex();
 
-    private const string CacheDirName = "DiscordTagsHome.json";
+    private const string CacheDirName = "DiscordTagsHome";
     private readonly MyManySmallStorage<DiscordHookCache> _manySmall;
 
     private readonly DiscordStorage _discordStorage;
