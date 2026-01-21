@@ -9,21 +9,25 @@ namespace OsuNews.Daily.Cache;
 public class DailyCacheStore : IHostedService
 {
     private readonly ILogger<DailyCacheStore> _logger;
-    private readonly DailyConfig _config;
+
+    private const string FileName = "LastDailyCache.json";
+
+    private readonly string _cachePath;
 
     public DailyCacheInfo? LastDailyCache { get; private set; }
 
-    public DailyCacheStore(IOptions<DailyConfig> options, ILogger<DailyCacheStore> logger)
+    public DailyCacheStore(IOptions<AppConfig> options, ILogger<DailyCacheStore> logger)
     {
         _logger = logger;
-        _config = options.Value;
+
+        _cachePath = Path.Combine(options.Value.DataPath, FileName);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (File.Exists(_config.CachePath))
+        if (File.Exists(_cachePath))
         {
-            string content = await File.ReadAllTextAsync(_config.CachePath, cancellationToken);
+            string content = await File.ReadAllTextAsync(_cachePath, cancellationToken);
 
             LastDailyCache = JsonSerializer.Deserialize<DailyCacheInfo>(content);
         }
@@ -43,6 +47,6 @@ public class DailyCacheStore : IHostedService
     private async Task SaveCacheAsync(DailyCacheInfo dailyCacheInfo, CancellationToken cancellationToken)
     {
         string content = JsonSerializer.Serialize(dailyCacheInfo);
-        await File.WriteAllTextAsync(_config.CachePath, content, cancellationToken);
+        await File.WriteAllTextAsync(_cachePath, content, cancellationToken);
     }
 }

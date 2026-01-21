@@ -18,6 +18,10 @@ public class Program
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        builder.Services.AddOptions<AppConfig>()
+            .Bind(builder.Configuration.GetSection(AppConfig.Path))
+            .ValidateOnStart();
+
         builder.Services.AddSingleton<MapDownloader>();
 
         {

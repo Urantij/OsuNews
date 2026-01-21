@@ -16,8 +16,6 @@ public class DailyConfig
 
     public TimeSpan FailureWaitTime { get; set; } = TimeSpan.FromSeconds(20);
 
-    public string CachePath { get; set; } = "./LastDailyCache.json";
-
     /// <summary>
     /// Пытаться анализировать круги карты
     /// </summary>
