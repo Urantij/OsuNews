@@ -15,6 +15,10 @@ class AccessTokenData(string token, DateTimeOffset expireDate)
     public DateTimeOffset ExpireDate { get; } = expireDate;
 }
 
+public class CooldownException : Exception
+{
+}
+
 public class OsuApi : IDisposable
 {
     // эээ)
@@ -33,6 +37,11 @@ public class OsuApi : IDisposable
 
     private readonly string _accessTokenDataFilePath;
     private readonly string _refreshTokenDataFilePath;
+
+    private readonly Lock _tokenUpdateLocker = new();
+    private readonly TimeSpan _tokenUpdateCooldown = TimeSpan.FromMinutes(1);
+    private TaskCompletionSource? _tokenUpdateTcs = null;
+    private DateTimeOffset? _lastTokenUpdateDate = null;
 
     public OsuApi(IOptions<AppConfig> appOptions, IOptions<OsuConfig> options, ILogger<OsuApi> logger)
     {
@@ -147,6 +156,7 @@ public class OsuApi : IDisposable
     /// </summary>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="CooldownException">Если кд на обновление.</exception>
     public async Task UpdateTokenAsync()
     {
         if (_accessTokenData == null)
@@ -167,16 +177,56 @@ public class OsuApi : IDisposable
             }
         }
 
-        if (_accessTokenData != null && DateTimeOffset.UtcNow < _accessTokenData.ExpireDate)
-            return;
+        TaskCompletionSource? thisTcs = null;
+        while (thisTcs == null)
+        {
+            Task? waitTask = null;
+            lock (_tokenUpdateLocker)
+            {
+                if (_tokenUpdateTcs != null)
+                {
+                    waitTask = _tokenUpdateTcs.Task;
+                }
+                else
+                {
+                    thisTcs = _tokenUpdateTcs =
+                        new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
 
-        RefreshResponse response = await MakeTokenAsync();
+            if (waitTask != null)
+                await waitTask;
+        }
 
-        _accessTokenData = new AccessTokenData(response.AccessToken,
-            DateTimeOffset.UtcNow + TimeSpan.FromSeconds(response.ExpiresIn - 600));
+        try
+        {
+            if (_accessTokenData != null && DateTimeOffset.UtcNow < _accessTokenData.ExpireDate)
+                return;
 
-        string writeContent = JsonSerializer.Serialize(_accessTokenData);
-        await File.WriteAllTextAsync(_accessTokenDataFilePath, writeContent);
+            if (_lastTokenUpdateDate != null &&
+                DateTimeOffset.UtcNow - _lastTokenUpdateDate.Value < _tokenUpdateCooldown)
+            {
+                throw new CooldownException();
+            }
+
+            _lastTokenUpdateDate = DateTimeOffset.UtcNow;
+
+            RefreshResponse response = await MakeTokenAsync();
+
+            _accessTokenData = new AccessTokenData(response.AccessToken,
+                DateTimeOffset.UtcNow + TimeSpan.FromSeconds(response.ExpiresIn - 600));
+
+            string writeContent = JsonSerializer.Serialize(_accessTokenData);
+            await File.WriteAllTextAsync(_accessTokenDataFilePath, writeContent);
+        }
+        finally
+        {
+            lock (_tokenUpdateLocker)
+            {
+                _tokenUpdateTcs = null;
+                thisTcs.SetResult();
+            }
+        }
     }
 
     /// <summary>

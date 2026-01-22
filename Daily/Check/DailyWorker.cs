@@ -51,7 +51,7 @@ public class DailyWorker : BackgroundService
             }
             catch (Exception e)
             {
-                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+                if (e is not (HttpRequestException or TaskCanceledException or CooldownException)) throw;
 
                 _logger.LogWarning(e, "Не удалось обновить токен.");
 
