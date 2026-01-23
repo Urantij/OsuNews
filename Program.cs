@@ -19,6 +19,25 @@ public class Program
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        builder.Logging.ClearProviders();
+        builder.Services.AddLogging(b =>
+        {
+            b.AddSimpleConsole(c => c.TimestampFormat = "[HH:mm:ss] ");
+
+#if DEBUG
+            {
+                b.SetMinimumLevel(LogLevel.Debug);
+            }
+#else
+            {
+                if (appArgs.Contains("--debug"))
+                {
+                    b.SetMinimumLevel(LogLevel.Debug);
+                }
+            }
+#endif
+        });
+
         builder.Services.AddOptions<AppConfig>()
             .Bind(builder.Configuration.GetSection(AppConfig.Path))
             .ValidateOnStart();
