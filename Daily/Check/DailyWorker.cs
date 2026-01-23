@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using OsuNews.Daily.Cache;
+using OsuNews.Help;
 using OsuNews.Map;
 using OsuNews.Map.Analyze;
 using OsuNews.Map.Models;
@@ -17,10 +18,12 @@ public class DailyWorker : BackgroundService
     private readonly DailyCacheStore _store;
     private readonly ILogger<DailyWorker> _logger;
     private readonly DailyConfig _config;
+    private readonly AppConfig _appConfig;
 
     public event Action<OsuFullDailyInfo>? NewDaily;
 
-    public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<DailyConfig> options, DailyCacheStore store,
+    public DailyWorker(OsuApi api, MapDownloader mapDownloader, IOptions<AppConfig> appOptions,
+        IOptions<DailyConfig> options, DailyCacheStore store,
         ILogger<DailyWorker> logger)
     {
         _api = api;
@@ -28,6 +31,7 @@ public class DailyWorker : BackgroundService
         _store = store;
         _logger = logger;
         _config = options.Value;
+        _appConfig = appOptions.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -156,9 +160,18 @@ public class DailyWorker : BackgroundService
             }
             catch (Exception e)
             {
-                if (e is not (HttpRequestException or TaskCanceledException)) throw;
+                if (e is JsonException jsonException)
+                {
+                    string path = ExceptionLogging.GeneratePath(_appConfig.DataPath);
+                    await ExceptionLogging.WriteExceptionDataAsync(jsonException, path);
 
-                _logger.LogWarning(e, "Не удалось загрузить карту.");
+                    _logger.LogWarning(e, "Не удалось пропарсить ответ, информация лежит в {path}", path);
+                }
+                else if (e is not (HttpRequestException or TaskCanceledException)) throw;
+                else
+                {
+                    _logger.LogWarning(e, "Не удалось загрузить карту.");
+                }
 
                 try
                 {
@@ -186,6 +199,7 @@ public class DailyWorker : BackgroundService
     /// <returns></returns>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="System.Text.Json.JsonException">Однажды и такое случилось. В <see cref="Exception.Data"/> под ключом "ResponseContent" будет лежать строка сообщения.</exception>
     private async Task<OsuFullDailyInfo> CreateFullInfoAsync(OsuGame daily, CancellationToken cancellationToken)
     {
         // В теории, не нужно делать все запросы заново, если провалился один.

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Web;
 using Microsoft.Extensions.Options;
+using OsuNews.Help;
 using OsuNews.Osu.Models;
 using OsuNews.Osu.Models.Set;
 
@@ -29,6 +30,7 @@ public class OsuApi : IDisposable
 
     private readonly ILogger<OsuApi> _logger;
     private readonly OsuConfig _config;
+    private readonly AppConfig _appConfig;
 
     private readonly HttpClient _client;
 
@@ -47,6 +49,7 @@ public class OsuApi : IDisposable
     {
         _logger = logger;
         _config = options.Value;
+        _appConfig = appOptions.Value;
 
         _client = new HttpClient();
 
@@ -91,10 +94,21 @@ public class OsuApi : IDisposable
         }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Не удалось загрузить сет.");
-            if (e is not (HttpRequestException or TaskCanceledException))
+            if (e is JsonException jsonException)
             {
-                _logger.LogWarning(e, "Специфичная ошибка");
+                string path = ExceptionLogging.GeneratePath(_appConfig.DataPath);
+                await ExceptionLogging.WriteExceptionDataAsync(jsonException, path);
+
+                _logger.LogWarning(e,
+                    "Не удалось пропарсить ответ при попытке загрузить сет, информация лежит в {path}", path);
+            }
+            else if (e is not (HttpRequestException or TaskCanceledException))
+            {
+                _logger.LogWarning(e, "Специфичная ошибка при попытке загрузить сет");
+            }
+            else
+            {
+                _logger.LogWarning(e, "Не удалось загрузить сет.");
             }
 
             return null;
@@ -272,6 +286,7 @@ public class OsuApi : IDisposable
     /// </summary>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="System.Text.Json.JsonException">Однажды и такое случилось. В <see cref="Exception.Data"/> под ключом "ResponseContent" будет лежать строка сообщения.</exception>
     public async Task<OsuBeatmapExtended> GetBeatmapAsync(ulong beatmapId)
     {
         _logger.LogDebug("Просим карту...");
@@ -285,7 +300,17 @@ public class OsuApi : IDisposable
         HttpResponseMessage responseMessage =
             await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 
-        return await responseMessage.Content.ReadFromJsonAsync<OsuBeatmapExtended>();
+        string contentString = await responseMessage.Content.ReadAsStringAsync();
+
+        try
+        {
+            return JsonSerializer.Deserialize<OsuBeatmapExtended>(contentString);
+        }
+        catch (JsonException jsonException)
+        {
+            jsonException.Data["ResponseContent"] = contentString;
+            throw;
+        }
     }
 
     // юзертегов нет в https://osu.ppy.sh/api/v2/beatmaps/ :)
@@ -297,6 +322,7 @@ public class OsuApi : IDisposable
     /// <returns></returns>
     /// <exception cref="System.Net.Http.HttpRequestException">Если провалился запрос. Такое бывает.</exception>
     /// <exception cref="System.Threading.Tasks.TaskCanceledException">Такое бывает.</exception>
+    /// <exception cref="System.Text.Json.JsonException">Однажды и такое случилось. В <see cref="Exception.Data"/> под ключом "ResponseContent" будет лежать строка сообщения.</exception>
     public async Task<OsuBeatmapSet> GetBeatmapSetAsync(ulong beatmapSetId)
     {
         _logger.LogDebug("Просим сет...");
@@ -310,7 +336,17 @@ public class OsuApi : IDisposable
         HttpResponseMessage responseMessage =
             await _client.SendAsync(requestMessage, HttpCompletionOption.ResponseContentRead);
 
-        return await responseMessage.Content.ReadFromJsonAsync<OsuBeatmapSet>();
+        string contentString = await responseMessage.Content.ReadAsStringAsync();
+
+        try
+        {
+            return JsonSerializer.Deserialize<OsuBeatmapSet>(contentString);
+        }
+        catch (JsonException jsonException)
+        {
+            jsonException.Data["ResponseContent"] = contentString;
+            throw;
+        }
     }
 
     // Этому здесь не совсем место (совсем не), но делать ещё один сервис ради этого мне впадлу.
