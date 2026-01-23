@@ -24,6 +24,8 @@ public class DailyTagUpdater : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Начинаем опрашивать теги. Обновление каждые {delay}", _config.TagsRecheckTime);
+
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
@@ -104,7 +106,12 @@ public class DailyTagUpdater : BackgroundService
                             [];
             string[] now = tags.Where(t => t.Count > OsuApi.TagCountsToCount).Select(t => t.Name).ToArray();
 
-            if (now.Length == were.Length && now.Intersect(were).Count() == now.Length) continue;
+            if (now.Length == were.Length && now.Intersect(were).Count() == now.Length)
+            {
+                cache.LatestTagsUpdate = DateTimeOffset.UtcNow;
+                await _store.UpdateCacheAsync(cache);
+                continue;
+            }
 
             cache.Tags = tags;
             cache.LatestTagsUpdate = DateTimeOffset.UtcNow;
