@@ -410,7 +410,7 @@ public partial class Discorder : IHostedService, INewscaster
     {
         try
         {
-            return await hook.Client.ExecuteAsync(b);
+            return await hook.Client.ExecuteAsync(b, wait: true);
         }
         catch (RestException re) when (re.StatusCode == HttpStatusCode.Unauthorized)
         {
