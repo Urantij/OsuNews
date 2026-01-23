@@ -30,7 +30,7 @@ public class Program
             }
 #else
             {
-                if (appArgs.Contains("--debug"))
+                if (args.Contains("--debug"))
                 {
                     b.SetMinimumLevel(LogLevel.Debug);
                 }
