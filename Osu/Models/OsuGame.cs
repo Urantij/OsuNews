@@ -118,7 +118,7 @@ public class PlaylistItem
 
     [JsonPropertyName("playlist_order")] public object PlaylistOrder { get; set; }
 
-    [JsonPropertyName("played_at")] public DateTime? PlayedAt { get; set; }
+    // [JsonPropertyName("played_at")] public DateTime? PlayedAt { get; set; }
 
     [JsonPropertyName("beatmap")] public Beatmap Beatmap { get; set; }
 }
@@ -150,7 +150,7 @@ public class Host
 
     [JsonPropertyName("is_supporter")] public bool IsSupporter { get; set; }
 
-    [JsonPropertyName("last_visit")] public DateTime LastVisit { get; set; }
+    // [JsonPropertyName("last_visit")] public DateTime LastVisit { get; set; }
 
     [JsonPropertyName("pm_friends_only")] public bool PmFriendsOnly { get; set; }
 
@@ -190,7 +190,7 @@ public class Participant
 
     [JsonPropertyName("is_supporter")] public bool IsSupporter { get; set; }
 
-    [JsonPropertyName("last_visit")] public DateTime? LastVisit { get; set; }
+    // [JsonPropertyName("last_visit")] public DateTime? LastVisit { get; set; }
 
     [JsonPropertyName("pm_friends_only")] public bool PmFriendsOnly { get; set; }
 
@@ -211,9 +211,9 @@ public class OsuGame
 
     [JsonPropertyName("user_id")] public ulong UserId { get; set; }
 
-    [JsonPropertyName("starts_at")] public DateTime StartsAt { get; set; }
+    [JsonPropertyName("starts_at")] public DateTimeOffset StartsAt { get; set; }
 
-    [JsonPropertyName("ends_at")] public DateTime EndsAt { get; set; }
+    [JsonPropertyName("ends_at")] public DateTimeOffset EndsAt { get; set; }
 
     [JsonPropertyName("max_attempts")] public int? MaxAttempts { get; set; }
 

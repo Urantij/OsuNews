@@ -117,7 +117,7 @@ public class DailyWorker : BackgroundService
             {
                 TimeSpan wait;
 
-                if (DateTime.UtcNow > _store.LastDailyCache.Game.EndsAt)
+                if (DateTimeOffset.UtcNow > _store.LastDailyCache.Game.EndsAt)
                 {
                     wait = _config.ActiveCheck;
                 }
@@ -128,9 +128,9 @@ public class DailyWorker : BackgroundService
                     // Если активное время наступает раньше конца пассивной проверки
                     // Проверим при наступлении активного времени + ожидание чека
 
-                    if (DateTime.UtcNow + wait >= _store.LastDailyCache.Game.EndsAt)
+                    if (DateTimeOffset.UtcNow + wait >= _store.LastDailyCache.Game.EndsAt)
                     {
-                        wait = (_store.LastDailyCache.Game.EndsAt - DateTime.UtcNow) + _config.ActiveCheck;
+                        wait = (_store.LastDailyCache.Game.EndsAt - DateTimeOffset.UtcNow) + _config.ActiveCheck;
                     }
                 }
 
