@@ -478,7 +478,8 @@ public partial class Discorder : IHostedService, INewscaster
             OsuTagData[] realTags = info.Tags.Where(tag => tag.Count >= OsuApi.TagCountsToCount).ToArray();
             if (realTags.Length > 0)
             {
-                return string.Join(' ', realTags.Select(t => t.Name));
+                // не знаю, мож стоило запятую поставить, но мне показалось так красивее
+                return string.Join("; ", realTags.Select(t => t.Name));
             }
         }
 
