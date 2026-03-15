@@ -35,11 +35,15 @@ public class VideoViewer : BackgroundService
             _lastKnownVideoId = await File.ReadAllTextAsync(_cachePath, stoppingToken);
         }
 
+        TimeSpan additionalDelay = TimeSpan.Zero;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(_config.CheckDelay, stoppingToken);
+                await Task.Delay(_config.CheckDelay + additionalDelay, stoppingToken);
+
+                additionalDelay = TimeSpan.Zero;
             }
             catch
             {
@@ -59,12 +63,33 @@ public class VideoViewer : BackgroundService
                 // Но с другой стороны, почему нет.
                 // апд НЕ ВСЕГДА 500 )))
 
+                additionalDelay = TimeSpan.FromMinutes(1);
+
                 _logger.LogWarning("Не удалось забрать айди последнего видео, так как ютуб недоступен.");
+                continue;
+            }
+            catch (Google.GoogleApiException apiException) when
+                (apiException.HttpStatusCode is HttpStatusCode.NotFound)
+            {
+                // И такое бывает...
+
+                additionalDelay = TimeSpan.FromMinutes(2);
+
+                _logger.LogWarning("Не удалось забрать айди последнего видео, так как ютуб не нашёл плейлист...");
                 continue;
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
             {
+                additionalDelay = TimeSpan.FromSeconds(30);
+
                 _logger.LogWarning(e, "Не удалось забрать айди последнего видео.");
+                continue;
+            }
+            catch (Exception e)
+            {
+                additionalDelay = TimeSpan.FromMinutes(1);
+
+                _logger.LogError(e, "Не удалось забрать айди последнего видео из за неизвестной ошибки.");
                 continue;
             }
 
